@@ -1,0 +1,41 @@
+:root{
+  --bg-deep:#1a0f36;--bg-mid:#2d1a5e;--accent-pink:#ff5da2;--accent-teal:#3fd0c9;
+  --accent-yellow:#ffd23f;--accent-red:#ff4d4d;--accent-green:#3ddc84;--accent-orange:#ff9f3f;
+  --card:#241448;--card-light:#332063;--text-dim:rgba(255,255,255,.65);
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;margin:0;font-family:'Segoe UI',system-ui,sans-serif;color:#fff;
+  background:radial-gradient(circle at 50% -10%,var(--bg-mid),var(--bg-deep) 65%);
+  overscroll-behavior:none;touch-action:manipulation}
+#app{min-height:100%}
+.screen{display:none;flex-direction:column;align-items:center;padding:1.5rem 1.2rem 3rem;min-height:100vh}
+.screen.active{display:flex}
+
+h1{font-size:1.8rem;margin:.5rem 0 1.2rem;text-align:center}
+h2{margin:.5rem 0}
+.dim{color:var(--text-dim);text-align:center}
+
+.field-label{align-self:flex-start;font-size:.85rem;color:var(--text-dim);font-weight:700;margin:.8rem 0 .3rem}
+input{width:100%;padding:.9rem 1rem;border-radius:12px;border:none;font-size:1.2rem;background:var(--card-light);
+  color:#fff;outline:none}
+.code-input{text-align:center;letter-spacing:6px;font-weight:800;text-transform:uppercase}
+input::placeholder{color:rgba(255,255,255,.35)}
+
+.avatar-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:.6rem;width:100%;margin-top:.3rem}
+.avatar-opt{background:var(--card);border:3px solid transparent;border-radius:14px;padding:.4rem;cursor:pointer}
+.avatar-opt img{width:100%;display:block;border-radius:50%;background:#fff}
+.avatar-opt.selected{border-color:var(--accent-teal);background:var(--card-light)}
+
+.btn{border:none;border-radius:14px;padding:.9rem 1.8rem;font-size:1.05rem;font-weight:800;cursor:pointer}
+.btn.primary{background:var(--accent-pink);color:#fff;box-shadow:0 5px 0 #b8296b}
+.btn.big{width:100%;margin-top:1.4rem;padding:1.1rem;font-size:1.2rem}
+.btn.ghost{background:transparent;color:#fff;border:2px solid rgba(255,255,255,.3)}
+.btn:active{transform:translateY(2px)}
+.error{color:var(--accent-red);min-height:1.2rem;margin-top:.6rem;font-weight:700;text-align:center}
+
+.you-card{display:flex;flex-direction:column;align-items:center;margin-top:2rem}
+.you-avatar{width:120px;height:120px;border-radius:50%;background:#fff;box-shadow:0 8px 20px rgba(0,0,0,.4)}
+.you-name{margin-top:.8rem;font-size:1.4rem;font-weight:800}
+.spinner{width:38px;height:38px;border-radius:50%;border:5px solid rgba(255,255,255,.2);
+  border-top-color:var(--accent-teal);animation:spin 1s linear infinite;margin:2rem 0 1rem}
+@keyframes spin{to{transform:rotate(360deg)}}

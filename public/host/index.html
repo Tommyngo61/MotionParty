@@ -1,0 +1,75 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Motion Party — Host</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🎮</text></svg>" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- LOBBY / GAME MENU -->
+    <section id="screen-lobby" class="screen active">
+      <header class="topbar">
+        <div class="logo">🎮 MOTION <span>PARTY</span></div>
+      </header>
+
+      <div class="lobby-grid">
+        <aside class="join-panel">
+          <h2>Scan to Join</h2>
+          <div class="qr-wrap"><img id="qr-img" alt="QR code to join" /></div>
+          <div class="room-code">Code: <span id="room-code">----</span></div>
+          <h3>Players <span id="player-count">(0)</span></h3>
+          <div id="player-list" class="player-list"></div>
+        </aside>
+
+        <main class="menu-panel">
+          <h2>Pick a Game</h2>
+          <div class="game-grid">
+            <button class="game-tile" data-game="tennis">
+              <div class="tile-emoji">🎾</div>
+              <div class="tile-name">Motion Tennis</div>
+              <div class="tile-sub">1 vs 1 · Swing to hit</div>
+            </button>
+            <button class="game-tile" data-game="quickshoot">
+              <div class="tile-emoji">🤠</div>
+              <div class="tile-name">1-2-3 Shoot!</div>
+              <div class="tile-sub">1 vs 1 · Quick draw duel</div>
+            </button>
+            <button class="game-tile locked" disabled>
+              <div class="tile-emoji">🍉</div>
+              <div class="tile-name">Fruit Ninja</div>
+              <div class="tile-sub">Coming soon</div>
+            </button>
+          </div>
+        </main>
+      </div>
+    </section>
+
+    <!-- PLAYER SELECT -->
+    <section id="screen-select" class="screen">
+      <h2 id="select-title">Choose 2 Players</h2>
+      <div id="select-list" class="select-list"></div>
+      <div class="select-actions">
+        <button id="select-back" class="btn ghost">Back</button>
+        <button id="select-start" class="btn primary" disabled>Start Game</button>
+      </div>
+    </section>
+
+    <!-- GAME -->
+    <section id="screen-game" class="screen">
+      <div id="game-root"></div>
+    </section>
+
+    <div id="toast" class="toast"></div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/shared/avatars.js"></script>
+  <script src="games/tennis.js"></script>
+  <script src="games/quickshoot.js"></script>
+  <script src="host.js"></script>
+</body>
+</html>

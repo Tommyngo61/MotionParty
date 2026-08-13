@@ -1,0 +1,77 @@
+:root{
+  --bg-deep:#1a0f36;
+  --bg-mid:#2d1a5e;
+  --accent-pink:#ff5da2;
+  --accent-teal:#3fd0c9;
+  --accent-yellow:#ffd23f;
+  --accent-red:#ff4d4d;
+  --accent-green:#3ddc84;
+  --accent-orange:#ff9f3f;
+  --card:#241448;
+  --card-light:#332063;
+  --text-dim:rgba(255,255,255,.65);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;font-family:'Segoe UI',system-ui,sans-serif;color:#fff;overflow:hidden}
+body{background:radial-gradient(circle at 50% -10%,var(--bg-mid),var(--bg-deep) 65%)}
+#app{height:100%;position:relative}
+
+.screen{display:none;height:100%;padding:1.5rem 2.5rem;flex-direction:column}
+.screen.active{display:flex}
+
+.topbar{display:flex;align-items:center;justify-content:center;margin-bottom:1rem}
+.logo{font-size:1.8rem;font-weight:900;letter-spacing:1px;text-shadow:0 3px 0 rgba(0,0,0,.3)}
+.logo span{color:var(--accent-pink)}
+
+.lobby-grid{display:grid;grid-template-columns:340px 1fr;gap:2rem;flex:1;min-height:0}
+
+.join-panel{background:var(--card);border-radius:20px;padding:1.5rem;display:flex;flex-direction:column;min-height:0}
+.join-panel h2{margin:0 0 .75rem;font-size:1.2rem}
+.join-panel h3{margin:1rem 0 .5rem;font-size:1rem;color:var(--text-dim);font-weight:600}
+.qr-wrap{background:#fff;border-radius:14px;padding:10px;width:180px;margin:0 auto}
+.qr-wrap img{width:100%;display:block}
+.room-code{text-align:center;font-size:1.4rem;font-weight:800;letter-spacing:3px;margin-top:.75rem;color:var(--accent-yellow)}
+.player-list{display:flex;flex-direction:column;gap:.5rem;overflow-y:auto;flex:1}
+.player-chip{display:flex;align-items:center;gap:.6rem;background:var(--card-light);border-radius:12px;padding:.4rem .6rem;animation:pop .25s ease}
+.player-chip img{width:36px;height:36px;border-radius:50%;background:#fff}
+.player-chip .pname{font-weight:700}
+.player-empty{color:var(--text-dim);font-size:.9rem;padding:.5rem 0}
+
+.menu-panel{min-height:0;display:flex;flex-direction:column}
+.menu-panel h2{margin:0 0 1rem}
+.game-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1.5rem}
+.game-tile{background:var(--card);border:3px solid transparent;border-radius:22px;color:#fff;padding:2rem 1rem;
+  cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:.4rem;transition:transform .15s, border-color .15s}
+.game-tile:hover:not(.locked){transform:translateY(-6px);border-color:var(--accent-pink)}
+.game-tile:active:not(.locked){transform:translateY(-2px)}
+.game-tile.locked{opacity:.4;cursor:not-allowed}
+.tile-emoji{font-size:3.2rem}
+.tile-name{font-size:1.3rem;font-weight:800}
+.tile-sub{color:var(--text-dim);font-size:.85rem}
+
+/* Player select screen */
+#screen-select{align-items:center;justify-content:center}
+#screen-select h2{font-size:2rem;margin-bottom:1.5rem}
+.select-list{display:flex;flex-wrap:wrap;gap:1.2rem;justify-content:center;max-width:900px}
+.select-card{background:var(--card);border:3px solid transparent;border-radius:18px;padding:1rem 1.4rem;
+  display:flex;flex-direction:column;align-items:center;gap:.5rem;cursor:pointer;width:130px}
+.select-card img{width:64px;height:64px;border-radius:50%;background:#fff}
+.select-card.selected{border-color:var(--accent-teal);background:var(--card-light)}
+.select-card .badge{font-size:.75rem;color:var(--accent-teal);font-weight:800;visibility:hidden}
+.select-card.selected .badge{visibility:visible}
+.select-actions{display:flex;gap:1rem;margin-top:2rem}
+
+.btn{border:none;border-radius:14px;padding:.9rem 1.8rem;font-size:1.05rem;font-weight:800;cursor:pointer}
+.btn.primary{background:var(--accent-pink);color:#fff;box-shadow:0 5px 0 #b8296b}
+.btn.primary:disabled{opacity:.35;cursor:not-allowed;box-shadow:none}
+.btn.ghost{background:transparent;color:#fff;border:2px solid rgba(255,255,255,.3)}
+.btn.teal{background:var(--accent-teal);color:#08312e;box-shadow:0 5px 0 #1f8f89}
+
+#screen-game{padding:0}
+#game-root{flex:1;position:relative;height:100%}
+
+.toast{position:fixed;bottom:1.5rem;left:50%;transform:translateX(-50%) translateY(120%);
+  background:#000a;padding:.8rem 1.4rem;border-radius:12px;font-weight:700;transition:transform .3s;z-index:50}
+.toast.show{transform:translateX(-50%) translateY(0)}
+
+@keyframes pop{from{transform:scale(.7);opacity:0}to{transform:scale(1);opacity:1}}

@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+<title>Motion Party — Controller</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📱</text></svg>" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <div id="app">
+
+    <section id="screen-join" class="screen active">
+      <h1>🎮 Motion Party</h1>
+      <label class="field-label" for="input-code">Room Code</label>
+      <input id="input-code" class="code-input" maxlength="4" autocapitalize="characters" placeholder="ABCD" />
+
+      <label class="field-label" for="input-name">Your Name</label>
+      <input id="input-name" maxlength="16" placeholder="Player" />
+
+      <div class="field-label">Choose your character</div>
+      <div id="avatar-grid" class="avatar-grid"></div>
+
+      <button id="btn-join" class="btn primary big">Join Party</button>
+      <div id="join-error" class="error"></div>
+    </section>
+
+    <section id="screen-waiting" class="screen">
+      <div class="you-card">
+        <img id="you-avatar" class="you-avatar" alt="" />
+        <div id="you-name" class="you-name"></div>
+      </div>
+      <div class="spinner"></div>
+      <p class="dim">Waiting for the host to start a game…</p>
+    </section>
+
+    <section id="screen-spectate" class="screen">
+      <h2>👀 Watching</h2>
+      <p id="spectate-text" class="dim"></p>
+      <p class="dim">Look at the TV!</p>
+    </section>
+
+    <section id="screen-controller" class="screen">
+      <div id="controller-root"></div>
+    </section>
+
+    <section id="screen-closed" class="screen">
+      <h2>Room closed</h2>
+      <p class="dim">The host ended the party.</p>
+    </section>
+
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/shared/avatars.js"></script>
+  <script src="controllers/tennis.js"></script>
+  <script src="controllers/quickshoot.js"></script>
+  <script src="player.js"></script>
+</body>
+</html>
