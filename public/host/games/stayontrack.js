@@ -5,8 +5,8 @@
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      .sot-wrap{position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,#1c2a4a,#0d1024 70%);
-        display:flex;flex-direction:column;align-items:center;padding:2rem;overflow:hidden}
+      .sot-wrap{position:absolute;inset:0;background:radial-gradient(circle at 50% 0%,#bdeaff,#8fd3ff 70%);
+        color:#16233d;display:flex;flex-direction:column;align-items:center;padding:2rem;overflow:hidden}
       .sot-title{font-size:1.6rem;font-weight:900;margin-bottom:2rem}
       .sot-lanes{display:flex;flex-direction:column;gap:2.2rem;width:100%;max-width:760px}
       .sot-lane{display:flex;align-items:center;gap:1rem}
@@ -20,9 +20,9 @@
         transition:width .12s linear}
       .sot-seg.done .fill{width:100%!important;background:linear-gradient(90deg,#ffd23f,#ff9f3f)}
       .sot-msg{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;
-        flex-direction:column;gap:.6rem;background:rgba(10,6,26,.75);z-index:5}
+        flex-direction:column;gap:.6rem;background:rgba(10,6,26,.75);color:#fff;z-index:5}
       .sot-msg .big{font-size:3rem;font-weight:900;text-shadow:0 4px 0 rgba(0,0,0,.4)}
-      .sot-msg .sub{color:var(--text-dim);font-size:1.1rem;text-align:center;max-width:480px}
+      .sot-msg .sub{color:rgba(255,255,255,.65);font-size:1.1rem;text-align:center;max-width:480px}
       .sot-result-actions{display:flex;gap:1rem;margin-top:1rem}
     `;
     document.head.appendChild(style);
@@ -60,7 +60,7 @@
         <div class="sot-lanes">${players.map(laneHtml).join('')}</div>
         <div class="sot-msg" id="sot-msg">
           <div class="big" id="sot-msg-big">Get Ready…</div>
-          <div class="sub">Hold your phone flat, face up, and tilt to steer the ball. Fall off and you restart that track!</div>
+          <div class="sub">Hold your phone flat to start! Then tilt forward/back to speed up or reverse, and left/right to steer. Fall off and you restart that track — Track 4 loops!</div>
         </div>
       </div>
     `;

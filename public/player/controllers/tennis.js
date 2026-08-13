@@ -6,7 +6,7 @@
     style.id = STYLE_ID;
     style.textContent = `
       .tnc{width:100%;min-height:80vh;display:flex;flex-direction:column;align-items:center;
-        justify-content:center;text-align:center;border-radius:24px;
+        justify-content:center;text-align:center;border-radius:24px;color:#fff;
         background:radial-gradient(circle,#3fd0c9,#0f5a55);transition:transform .08s}
       .tnc.swung{transform:scale(1.04)}
       .tnc .tnc-icon{font-size:5rem}

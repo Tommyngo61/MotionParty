@@ -9,16 +9,17 @@ const { RoomStore } = require('./rooms');
 const app = express();
 const server = http.createServer(app);
 
-// Some reverse proxies (Cloudflare Tunnel included) strip the trailing slash
-// from "/socket.io/" when a query string follows, e.g. "/socket.io?EIO=...".
-// engine.io only matches the exact "/socket.io/" prefix, so restore the slash
-// before any request listener (including engine.io's own) sees it.
+// Cloudflare Tunnel strips the trailing slash from proxied request paths (e.g.
+// "/socket.io/" -> "/socket.io", "/host/" -> "/host"). engine.io's handshake and
+// express.static's directory-index resolution both require that exact trailing
+// slash, so restore it - for these known directory-style routes only - before any
+// request listener (including engine.io's own) sees it.
 const originalEmit = server.emit.bind(server);
 server.emit = (event, ...args) => {
   if (event === 'request' || event === 'upgrade') {
     const req = args[0];
     if (typeof req.url === 'string') {
-      req.url = req.url.replace(/^\/socket\.io(?=$|\?)/, '/socket.io/');
+      req.url = req.url.replace(/^\/(socket\.io|host|player)(?=$|\?)/, '/$1/');
     }
   }
   return originalEmit(event, ...args);
@@ -29,7 +30,12 @@ const io = new Server(server);
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, '..', 'public');
 
-app.use(express.static(PUBLIC_DIR));
+// `redirect: false` stops express.static from 301'ing "/host" -> "/host/" to resolve
+// a directory's index.html. Cloudflare Tunnel strips trailing slashes from proxied
+// requests, so that redirect's target immediately loses its slash again on the way
+// back in - an infinite redirect loop. We always link with the trailing slash already
+// (see public/index.html), so the auto-redirect was never actually needed.
+app.use(express.static(PUBLIC_DIR, { redirect: false }));
 
 const store = new RoomStore();
 
@@ -41,6 +47,9 @@ const QS_RESULT_TIMEOUT = 3000; // grace period after FIRE before we declare a n
 
 // ---- Stay on Track timing constants (ms) ----
 const SOT_COUNTDOWN_MS = 3000; // must match the 3-2-1-GO countdown shown on host + phones
+
+// ---- Tilt Maze timing constants (ms) ----
+const TM_COUNTDOWN_MS = 3000; // must match the 3-2-1-GO countdown shown on host + phones
 
 function rand(min, max) {
   return Math.floor(min + Math.random() * (max - min));
@@ -94,8 +103,10 @@ io.on('connection', (socket) => {
   socket.on('host:startMatch', ({ code, game }) => {
     const room = store.getRoom(code);
     if (!room || room.hostSocketId !== socket.id) return;
-    const minPlayers = game === 'stayontrack' ? 1 : 2;
-    if (!room.matchPlayers || room.matchPlayers.length < minPlayers || room.matchPlayers.length > 2) return;
+    const isFreeForAll = game === 'stayontrack' || game === 'tiltmaze';
+    const minPlayers = isFreeForAll ? 1 : 2;
+    const maxPlayers = isFreeForAll ? Infinity : 2;
+    if (!room.matchPlayers || room.matchPlayers.length < minPlayers || room.matchPlayers.length > maxPlayers) return;
 
     clearGameTimers(room);
     room.currentGame = game;
@@ -108,6 +119,8 @@ io.on('connection', (socket) => {
       startQuickshoot(room);
     } else if (game === 'stayontrack') {
       startStayOnTrack(room);
+    } else if (game === 'tiltmaze') {
+      startTiltMaze(room);
     }
   });
 
@@ -210,7 +223,8 @@ io.on('connection', (socket) => {
     }
   });
 
-  // Stay on Track: a player reached the end of the 4th track
+  // Stay on Track is free-for-all - any number of racers, first to clear all 4
+  // tracks wins. There's no single "loser": everyone else just didn't finish first.
   socket.on('stayontrack:finish', ({ totalTimeMs }) => {
     const room = store.getRoom(socket.data.roomCode);
     if (!room || room.currentGame !== 'stayontrack' || !room.gameState) return;
@@ -218,11 +232,22 @@ io.on('connection', (socket) => {
     if (gs.resolved || gs.phase !== 'racing') return;
     gs.resolved = true;
     clearGameTimers(room);
-    const winnerId = socket.data.playerId;
-    const loserId = (room.matchPlayers || []).find((id) => id !== winnerId) || null;
     io.to(room.code).emit('stayontrack:result', {
-      winnerId,
-      loserId,
+      winnerId: socket.data.playerId,
+      winnerTimeMs: Math.round(totalTimeMs),
+    });
+  });
+
+  // Tilt Maze is also free-for-all - first to solve both mazes wins.
+  socket.on('tiltmaze:finish', ({ totalTimeMs }) => {
+    const room = store.getRoom(socket.data.roomCode);
+    if (!room || room.currentGame !== 'tiltmaze' || !room.gameState) return;
+    const gs = room.gameState;
+    if (gs.resolved || gs.phase !== 'racing') return;
+    gs.resolved = true;
+    clearGameTimers(room);
+    io.to(room.code).emit('tiltmaze:result', {
+      winnerId: socket.data.playerId,
       winnerTimeMs: Math.round(totalTimeMs),
     });
   });
@@ -319,6 +344,19 @@ function startStayOnTrack(room) {
       gs.phase = 'racing';
       io.to(room.code).emit('stayontrack:go', { ts: Date.now() });
     }, SOT_COUNTDOWN_MS)
+  );
+}
+
+function startTiltMaze(room) {
+  const gs = room.gameState;
+  gs.phase = 'countdown';
+  gs.timers = [];
+  gs.timers.push(
+    setTimeout(() => {
+      if (gs.resolved) return;
+      gs.phase = 'racing';
+      io.to(room.code).emit('tiltmaze:go', { ts: Date.now() });
+    }, TM_COUNTDOWN_MS)
   );
 }
 

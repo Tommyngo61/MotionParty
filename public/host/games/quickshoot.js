@@ -5,7 +5,7 @@
     const style = document.createElement('style');
     style.id = STYLE_ID;
     style.textContent = `
-      .qs-wrap{position:absolute;inset:0;background:linear-gradient(180deg,#3a1f14 0%,#1a0f36 55%);
+      .qs-wrap{position:absolute;inset:0;background:linear-gradient(180deg,#3a1f14 0%,#1a0f36 55%);color:#fff;
         display:flex;flex-direction:column;overflow:hidden}
       .qs-caption{text-align:center;font-size:1.6rem;font-weight:800;padding:1.2rem 0 .4rem;
         text-shadow:0 3px 0 rgba(0,0,0,.4);min-height:2.4rem;transition:color .2s}
@@ -36,7 +36,7 @@
       .qs-result{position:absolute;inset:0;background:rgba(10,6,26,.9);display:flex;flex-direction:column;
         align-items:center;justify-content:center;gap:1.2rem;text-align:center;padding:2rem}
       .qs-result h1{font-size:2.4rem;margin:0}
-      .qs-result .qs-sub{color:var(--text-dim);font-size:1.1rem}
+      .qs-result .qs-sub{color:rgba(255,255,255,.65);font-size:1.1rem}
       .qs-result .qs-times{display:flex;gap:3rem;margin-top:.5rem}
       .qs-result .qs-times div{font-size:1.3rem;font-weight:700}
       .qs-result .qs-actions{display:flex;gap:1rem;margin-top:1rem}
@@ -51,7 +51,7 @@
 
   function start(root, ctx) {
     ensureStyle();
-    const { socket, roomCode, players, onExit } = ctx;
+    const { socket, roomCode, players, onExit, bracketMode, onMatchResult } = ctx;
     const [p1, p2] = players;
     let timers = [];
     const setT = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
@@ -116,7 +116,7 @@
 
     function onResult(result) {
       clearTimers();
-      showResult(root, result, { p1, p2, socket, roomCode, onExit, c1, c2 });
+      showResult(root, result, { p1, p2, socket, roomCode, onExit, c1, c2, bracketMode, onMatchResult });
     }
 
     socket.on('quickshoot:state', onState);
@@ -131,7 +131,7 @@
     };
   }
 
-  function showResult(root, result, { p1, p2, socket, roomCode, onExit, c1, c2 }) {
+  function showResult(root, result, { p1, p2, socket, roomCode, onExit, c1, c2, bracketMode, onMatchResult }) {
     const wrap = root.querySelector('.qs-wrap');
     const byId = { [p1.id]: p1, [p2.id]: p2 };
     const { reason, winnerId, loserId, times } = result;
@@ -169,6 +169,16 @@
 
     const overlay = document.createElement('div');
     overlay.className = 'qs-result';
+    if (bracketMode) {
+      overlay.innerHTML = `
+        <h1>${escapeHtml(headline)}</h1>
+        <div class="qs-sub">${escapeHtml(sub)}</div>
+        <div class="qs-sub">${winnerId ? 'Advancing the bracket…' : 'Replaying this match…'}</div>
+      `;
+      wrap.appendChild(overlay);
+      setTimeout(() => onMatchResult && onMatchResult(winnerId || null), 2600);
+      return;
+    }
     overlay.innerHTML = `
       <h1>${escapeHtml(headline)}</h1>
       <div class="qs-sub">${escapeHtml(sub)}</div>

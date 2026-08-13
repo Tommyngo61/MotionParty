@@ -6,7 +6,7 @@
     style.id = STYLE_ID;
     style.textContent = `
       .qsc{width:100%;min-height:80vh;display:flex;flex-direction:column;align-items:center;
-        justify-content:center;text-align:center;border-radius:24px;transition:background .2s;
+        justify-content:center;text-align:center;border-radius:24px;transition:background .2s;color:#fff;
         background:#333}
       .qsc.red{background:radial-gradient(circle,#ff6b6b,#7a1f1f)}
       .qsc.orange{background:radial-gradient(circle,#ffb85e,#7a4a1f)}

@@ -31,17 +31,22 @@
             <button class="game-tile" data-game="tennis">
               <div class="tile-emoji">🎾</div>
               <div class="tile-name">Motion Tennis</div>
-              <div class="tile-sub">1 vs 1 · Swing to hit</div>
+              <div class="tile-sub">1v1 or Tournament · Swing to hit</div>
             </button>
             <button class="game-tile" data-game="quickshoot">
               <div class="tile-emoji">🤠</div>
               <div class="tile-name">1-2-3 Shoot!</div>
-              <div class="tile-sub">1 vs 1 · Quick draw duel</div>
+              <div class="tile-sub">1v1 or Tournament · Quick draw duel</div>
             </button>
             <button class="game-tile" data-game="stayontrack">
               <div class="tile-emoji">🛤️</div>
               <div class="tile-name">Stay on Track</div>
-              <div class="tile-sub">1 vs 1 · Tilt &amp; balance race</div>
+              <div class="tile-sub">Free-for-all · Tilt &amp; balance race</div>
+            </button>
+            <button class="game-tile" data-game="tiltmaze">
+              <div class="tile-emoji">🧭</div>
+              <div class="tile-name">Tilt Maze</div>
+              <div class="tile-sub">Free-for-all · Roll the ball to the hole</div>
             </button>
             <button class="game-tile locked" disabled>
               <div class="tile-emoji">🍉</div>
@@ -56,6 +61,11 @@
     <!-- PLAYER SELECT -->
     <section id="screen-select" class="screen">
       <h2 id="select-title">Choose 2 Players</h2>
+      <div id="select-howto" class="select-howto"></div>
+      <div id="select-mode" class="select-mode">
+        <button class="mode-btn" data-mode="single">Single Play (1v1)</button>
+        <button class="mode-btn" data-mode="bracket">Tournament Bracket</button>
+      </div>
       <div id="select-list" class="select-list"></div>
       <div class="select-actions">
         <button id="select-back" class="btn ghost">Back</button>
@@ -63,8 +73,19 @@
       </div>
     </section>
 
+    <!-- TOURNAMENT BRACKET -->
+    <section id="screen-bracket" class="screen">
+      <div class="bracket-topbar">
+        <h2>Tournament Bracket</h2>
+        <button id="bracket-end-top" class="btn ghost small">✕ End Tournament</button>
+      </div>
+      <div id="bracket-rounds" class="bracket-rounds"></div>
+      <div id="bracket-actions" class="bracket-actions"></div>
+    </section>
+
     <!-- GAME -->
     <section id="screen-game" class="screen">
+      <button id="end-game-btn" class="btn ghost small end-game-btn">✕ End Game</button>
       <div id="game-root"></div>
     </section>
 
@@ -74,9 +95,11 @@
   <script src="/socket.io/socket.io.js"></script>
   <script src="/shared/avatars.js"></script>
   <script src="/shared/tracks.js"></script>
+  <script src="/shared/mazes.js"></script>
   <script src="games/tennis.js"></script>
   <script src="games/quickshoot.js"></script>
   <script src="games/stayontrack.js"></script>
+  <script src="games/tiltmaze.js"></script>
   <script src="host.js"></script>
 </body>
 </html>

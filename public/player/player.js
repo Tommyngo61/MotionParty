@@ -92,7 +92,8 @@
       showScreen('spectate');
       return;
     }
-    const opponent = players.find((p) => p.id !== playerId);
+    const opponents = players.filter((p) => p.id !== playerId);
+    const opponent = opponents[0]; // 1v1 games (tennis/quickshoot) only ever have exactly one
     const root = el('controller-root');
     root.innerHTML = '';
     const mod = window.MP_CONTROLLERS && window.MP_CONTROLLERS[game];
@@ -100,7 +101,7 @@
     // Show the screen first so game modules that measure the DOM (e.g. sizing a canvas)
     // don't read zero dimensions from a still-`display:none` container.
     showScreen('controller');
-    activeController = mod.start(root, { socket, roomCode, playerId, me, opponent });
+    activeController = mod.start(root, { socket, roomCode, playerId, me, opponent, opponents });
   });
 
   socket.on('menu:show', () => {

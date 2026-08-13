@@ -6,7 +6,7 @@
     style.id = STYLE_ID;
     style.textContent = `
       .tn-wrap{position:absolute;inset:0;background:linear-gradient(180deg,#8fd3ff 0%,#bdeaff 38%,#2c7a3d 38%);
-        overflow:hidden}
+        overflow:hidden;color:#fff}
       .tn-scorebar{position:absolute;top:10px;left:50%;transform:translateX(-50%);
         background:rgba(10,6,26,.55);padding:.5rem 1.4rem;border-radius:14px;font-weight:800;
         font-size:1.3rem;z-index:5;display:flex;gap:1rem;align-items:center}
@@ -19,6 +19,7 @@
       .tn-result{position:absolute;inset:0;background:rgba(10,6,26,.9);display:flex;flex-direction:column;
         align-items:center;justify-content:center;gap:1rem;text-align:center;z-index:10}
       .tn-result h1{font-size:2.4rem;margin:0}
+      .tn-result .tn-sub{color:rgba(255,255,255,.65);font-size:1.1rem}
       .tn-result .tn-actions{display:flex;gap:1rem;margin-top:1rem}
     `;
     document.head.appendChild(style);
@@ -42,7 +43,7 @@
 
   function start(root, ctx) {
     ensureStyle();
-    const { socket, roomCode, players, onExit } = ctx;
+    const { socket, roomCode, players, onExit, bracketMode, onMatchResult } = ctx;
     root.innerHTML = `
       <div class="tn-wrap">
         <div class="tn-scorebar">
@@ -317,6 +318,16 @@
       clearTimeout(serveTimer);
       const overlay = document.createElement('div');
       overlay.className = 'tn-result';
+      if (bracketMode) {
+        overlay.innerHTML = `
+          <h1>🏆 ${escapeHtml(players[winnerIdx].name)} wins!</h1>
+          <div>${score[0]} - ${score[1]}</div>
+          <div class="tn-sub">Advancing the bracket…</div>
+        `;
+        wrap.appendChild(overlay);
+        setTimeout(() => onMatchResult && onMatchResult(players[winnerIdx].id), 2600);
+        return;
+      }
       overlay.innerHTML = `
         <h1>🏆 ${escapeHtml(players[winnerIdx].name)} wins the match!</h1>
         <div>${score[0]} - ${score[1]}</div>
