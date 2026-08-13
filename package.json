@@ -1,0 +1,20 @@
+{
+  "name": "motion-party",
+  "version": "0.1.0",
+  "description": "A Mario-Party-style motion control party game. Big screen host + phones as gyro controllers.",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node server/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2",
+    "nanoid": "^3.3.7",
+    "qrcode": "^1.5.3",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "playwright": "^1.62.1"
+  }
+}
