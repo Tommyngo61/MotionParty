@@ -78,7 +78,8 @@ io.on('connection', (socket) => {
   socket.on('host:startMatch', ({ code, game }) => {
     const room = store.getRoom(code);
     if (!room || room.hostSocketId !== socket.id) return;
-    if (!room.matchPlayers || room.matchPlayers.length !== 2) return;
+    const minPlayers = game === 'stayontrack' ? 1 : 2;
+    if (!room.matchPlayers || room.matchPlayers.length < minPlayers || room.matchPlayers.length > 2) return;
 
     clearGameTimers(room);
     room.currentGame = game;

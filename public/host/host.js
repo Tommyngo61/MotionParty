@@ -59,11 +59,19 @@
   }
 
   // ---------- Player select screen ----------
+  function minPlayersFor(game) {
+    return game === 'stayontrack' ? 1 : 2;
+  }
+
   function openSelectScreen(game) {
     pendingGame = game;
     selected = [];
-    el('select-title').textContent =
-      game === 'tennis' ? 'Choose 2 Players for Motion Tennis' : 'Choose 2 Players for 1-2-3 Shoot!';
+    const titles = {
+      tennis: 'Choose 2 Players for Motion Tennis',
+      quickshoot: 'Choose 2 Players for 1-2-3 Shoot!',
+      stayontrack: 'Choose 1-2 Players for Stay on Track',
+    };
+    el('select-title').textContent = titles[game] || 'Choose Players';
     renderSelectList();
     showScreen('select');
   }
@@ -92,7 +100,7 @@
       card.addEventListener('click', () => toggleSelect(p.id));
       list.appendChild(card);
     }
-    el('select-start').disabled = selected.length !== 2;
+    el('select-start').disabled = selected.length < minPlayersFor(pendingGame) || selected.length > 2;
   }
 
   function toggleSelect(id) {
@@ -110,7 +118,7 @@
 
   el('select-back').addEventListener('click', () => showScreen('lobby'));
   el('select-start').addEventListener('click', () => {
-    if (selected.length !== 2) return;
+    if (selected.length < minPlayersFor(pendingGame) || selected.length > 2) return;
     socket.emit('host:setMatchPlayers', { code: roomCode, playerIds: selected });
     socket.emit('host:startMatch', { code: roomCode, game: pendingGame });
   });
