@@ -8,6 +8,22 @@ const { RoomStore } = require('./rooms');
 
 const app = express();
 const server = http.createServer(app);
+
+// Some reverse proxies (Cloudflare Tunnel included) strip the trailing slash
+// from "/socket.io/" when a query string follows, e.g. "/socket.io?EIO=...".
+// engine.io only matches the exact "/socket.io/" prefix, so restore the slash
+// before any request listener (including engine.io's own) sees it.
+const originalEmit = server.emit.bind(server);
+server.emit = (event, ...args) => {
+  if (event === 'request' || event === 'upgrade') {
+    const req = args[0];
+    if (typeof req.url === 'string') {
+      req.url = req.url.replace(/^\/socket\.io(?=$|\?)/, '/socket.io/');
+    }
+  }
+  return originalEmit(event, ...args);
+};
+
 const io = new Server(server);
 
 const PORT = process.env.PORT || 3000;
