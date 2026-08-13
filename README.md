@@ -46,13 +46,27 @@ This starts one Express + Socket.IO server on port 3000 (override with `PORT=...
 Phone browsers only expose `DeviceMotionEvent`/`DeviceOrientationEvent` on a
 **secure context** — `https://` or `localhost`. Plain `http://192.168.x.x:3000` will
 load the pages fine, but the gyro/accelerometer permission prompt will silently fail
-on real phones. For LAN playtesting, put the server behind a quick HTTPS tunnel, e.g.:
+on real phones. For LAN playtesting, put the server behind a quick HTTPS tunnel.
+
+**Option A — Cloudflare Tunnel** (no account needed):
+
+```
+winget install --id Cloudflare.cloudflared -e
+cloudflared tunnel --url http://localhost:3000
+```
+
+This prints a random `https://<words>.trycloudflare.com` URL — use it on the
+phones for `/player/` and on the TV for `/host/`. The URL changes every time you
+restart the tunnel, and Cloudflare gives no uptime guarantee for these "quick"
+tunnels, so it's meant for playtesting, not a standing address.
+
+**Option B — ngrok** (needs a free account + authtoken configured first):
 
 ```
 npx ngrok http 3000
 ```
 
-then use the printed `https://...ngrok...` URL on the phones (the host screen can
+Either way, use the printed `https://...` URL on the phones (the host screen can
 still use plain HTTP on your LAN if you prefer). For a real deployment, put this
 behind any HTTPS reverse proxy.
 
