@@ -23,6 +23,9 @@ const QS_READY_DELAY = [1000, 2200];
 const QS_SET_DELAY = [900, 2100];
 const QS_RESULT_TIMEOUT = 3000; // grace period after FIRE before we declare a no-show
 
+// ---- Stay on Track timing constants (ms) ----
+const SOT_COUNTDOWN_MS = 3000; // must match the 3-2-1-GO countdown shown on host + phones
+
 function rand(min, max) {
   return Math.floor(min + Math.random() * (max - min));
 }
@@ -86,6 +89,8 @@ io.on('connection', (socket) => {
 
     if (game === 'quickshoot') {
       startQuickshoot(room);
+    } else if (game === 'stayontrack') {
+      startStayOnTrack(room);
     }
   });
 
@@ -188,6 +193,23 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Stay on Track: a player reached the end of the 4th track
+  socket.on('stayontrack:finish', ({ totalTimeMs }) => {
+    const room = store.getRoom(socket.data.roomCode);
+    if (!room || room.currentGame !== 'stayontrack' || !room.gameState) return;
+    const gs = room.gameState;
+    if (gs.resolved || gs.phase !== 'racing') return;
+    gs.resolved = true;
+    clearGameTimers(room);
+    const winnerId = socket.data.playerId;
+    const loserId = (room.matchPlayers || []).find((id) => id !== winnerId) || null;
+    io.to(room.code).emit('stayontrack:result', {
+      winnerId,
+      loserId,
+      winnerTimeMs: Math.round(totalTimeMs),
+    });
+  });
+
   // ---------------- DISCONNECT ----------------
   socket.on('disconnect', () => {
     const result = store.removeBySocket(socket.id);
@@ -267,6 +289,19 @@ function startQuickshoot(room) {
         }, rand(QS_READY_DELAY[0], QS_READY_DELAY[1]))
       );
     }, QS_WALK_DURATION)
+  );
+}
+
+function startStayOnTrack(room) {
+  const gs = room.gameState;
+  gs.phase = 'countdown';
+  gs.timers = [];
+  gs.timers.push(
+    setTimeout(() => {
+      if (gs.resolved) return;
+      gs.phase = 'racing';
+      io.to(room.code).emit('stayontrack:go', { ts: Date.now() });
+    }, SOT_COUNTDOWN_MS)
   );
 }
 

@@ -13,6 +13,13 @@ name and an animal avatar, and play by swinging/aiming their phone.
   face off, then a light goes red → orange → **green** at a random moment. Draw
   (flick your phone up) after green — draw early and you lose instantly. Both
   reaction times are shown, and the loser goes down in a cartoon "BANG!".
+- **Stay on Track** — 1v1 balance race across 4 increasingly-tight courses. Hold your
+  phone flat, face up, and tilt it left/right to steer a ball along a winding path
+  that scrolls on your own screen (each player sees their own track, not the TV).
+  Drift off the edge and you restart *that* track from the beginning — no penalty
+  beyond lost time. First to clear all 4 tracks wins; the host screen shows both
+  racers' live progress bar and retry count. Tip the phone up out of "flat" and
+  steering pauses until you level it back out again.
 - **Fruit Ninja** — on the menu as "coming soon", intentionally skipped for now.
 
 All character art is hand-drawn as plain SVG shapes in `public/shared/avatars.js` —
@@ -57,37 +64,51 @@ the Join button itself requests permission.
 ```
 server/
   index.js     Express static hosting + Socket.IO: rooms, lobby, relay, and the
-               server-authoritative 1-2-3 Shoot timing state machine.
+               server-authoritative 1-2-3 Shoot / Stay on Track timing state machines.
   rooms.js     In-memory room/player store.
 
 public/
   index.html         Landing page (links to /host/ and /player/).
   shared/avatars.js  Hand-coded SVG animal avatars, shared by both apps.
+  shared/tracks.js   Procedural course definitions for Stay on Track, shared by both apps.
 
   host/              The big-screen app: lobby, QR code, game menu, player-select,
-    host.js          and game rendering (Canvas 2D for Tennis, DOM/CSS for Shoot).
+    host.js          and game rendering (Canvas 2D for Tennis, DOM/CSS for the rest).
     games/tennis.js
     games/quickshoot.js
+    games/stayontrack.js
 
   player/            The phone app: join flow, avatar picker, and per-game
     player.js        controllers that read devicemotion/deviceorientation and
-    controllers/tennis.js      send discrete input events over the socket.
+    controllers/tennis.js      send input to the host/server over the socket.
     controllers/quickshoot.js
+    controllers/stayontrack.js
 ```
 
 ### How input flows
 
-Phones never run any game logic — they just detect a gesture (a swing peak, a
-quick-draw flick, a too-early move) and emit a small event over Socket.IO.
+Phones never run the *scoring* logic — but Stay on Track is the one game where the
+phone does run its own real-time physics (see below), since routing raw tilt through
+the server to a host-rendered ball would add enough latency to make balance
+control feel unresponsive.
 
 - **Tennis**: the host browser is authoritative — it runs the whole rally
   simulation (ball flight, auto-positioning, scoring) in a `requestAnimationFrame`
-  loop. Phones send `player:input` swing events, the server relays them to the host
-  only, and the host decides whether the swing landed in the hit window.
+  loop. Phones detect a swing (an accelerometer peak) and send a `player:input`
+  event; the server relays it to the host only, and the host decides whether the
+  swing landed in the hit window.
 - **1-2-3 Shoot**: the *server* is authoritative for timing fairness — it runs the
   walk → ready → set → fire sequence and broadcasts each phase to the host and both
   phones at the same instant. Phones compute their own reaction time locally and
   report it back; the server picks the winner and every screen renders the result.
+- **Stay on Track**: each phone runs its own local tilt-maze simulation and canvas
+  render (reading `deviceorientation` continuously, not just single gestures) so
+  steering feels instant. The server only broadcasts the synchronized `GO` signal
+  after the walk-in countdown and arbitrates the win (whichever phone's
+  `stayontrack:finish` arrives first, once all 4 tracks are cleared). Phones relay
+  their live track/progress/attempt count over the existing generic `player:input`
+  channel purely so the host can render a live progress bar — the host never
+  simulates this game.
 
 ## Tuning
 
@@ -96,6 +117,16 @@ top of `public/player/controllers/tennis.js` and `quickshoot.js` — different p
 report different accelerometer scales, so nudge `SWING_THRESHOLD` /
 `READY_THRESHOLD` / `DRAW_THRESHOLD` if a game feels too twitchy or too unresponsive
 on your hardware.
+
+Stay on Track's difficulty lives in `public/shared/tracks.js` as `width` (how much
+drift is forgiven), `speed` (how fast progress — and therefore the wobble — advances),
+and `wobble` (sine terms that build the winding centerline). It's tuned so each
+track's *worst-case* required steering speed stays comfortably under what the ball's
+`ACCEL` constant (in `public/player/controllers/stayontrack.js`) can actually deliver
+— i.e. every track should be beatable with patient, accurate tilting, just
+progressively less forgiving of mistakes. If you widen the gap between the two
+you risk a track that's steering-rate-impossible rather than merely hard; if you
+tune it, sanity-check the new peak wobble slope against `ACCEL` the same way.
 
 ## Adding the next game
 
