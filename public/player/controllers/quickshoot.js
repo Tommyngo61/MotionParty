@@ -6,17 +6,16 @@
     style.id = STYLE_ID;
     style.textContent = `
       .qsc{width:100%;min-height:80vh;display:flex;flex-direction:column;align-items:center;
-        justify-content:center;text-align:center;border-radius:24px;transition:background .2s;color:#fff;
-        background:#333}
-      .qsc.red{background:radial-gradient(circle,#ff6b6b,#7a1f1f)}
-      .qsc.orange{background:radial-gradient(circle,#ffb85e,#7a4a1f)}
-      .qsc.green{background:radial-gradient(circle,#5cf0a0,#0f6d3f)}
-      .qsc.win{background:radial-gradient(circle,#ffe15e,#8a6a00)}
-      .qsc.lose{background:radial-gradient(circle,#8f8f8f,#2a2a2a)}
-      .qsc .qsc-vs{font-size:1rem;color:rgba(255,255,255,.7);margin-bottom:.4rem}
-      .qsc .qsc-title{font-size:2rem;font-weight:900;text-shadow:0 3px 0 rgba(0,0,0,.4)}
-      .qsc .qsc-sub{margin-top:.6rem;font-size:1.1rem;color:rgba(255,255,255,.85)}
-      .qsc .qsc-time{margin-top:1rem;font-size:1.6rem;font-weight:800}
+        justify-content:center;text-align:center;border-radius:24px;transition:background .2s,color .2s;
+        background:#bfe3ff;color:#0b2b4a}
+      .qsc.red{background:radial-gradient(circle,#ff6b6b,#7a1f1f);color:#fff}
+      .qsc.orange{background:radial-gradient(circle,#ffb85e,#7a4a1f);color:#fff}
+      .qsc.green{background:radial-gradient(circle,#5cf0a0,#0f6d3f);color:#fff}
+      .qsc.win{background:radial-gradient(circle,#ffe15e,#8a6a00);color:#fff}
+      .qsc.lose{background:radial-gradient(circle,#8f8f8f,#2a2a2a);color:#fff}
+      .qsc .qsc-vs{font-size:1rem;opacity:.7;margin-bottom:.4rem}
+      .qsc .qsc-title{font-size:2rem;font-weight:900;text-shadow:0 3px 0 rgba(0,0,0,.2)}
+      .qsc .qsc-sub{margin-top:.6rem;font-size:1.1rem;opacity:.85}
       .qsc-icon{font-size:4rem;margin-bottom:.4rem}
     `;
     document.head.appendChild(style);
@@ -59,13 +58,11 @@
         <div class="qsc-vs">${opponent ? 'Duel vs ' + escapeHtml(opponent.name) : 'Quick Draw Duel'}</div>
         <div class="qsc-title" id="qsc-title">Get in position…</div>
         <div class="qsc-sub" id="qsc-sub">Point your phone down at your side and hold it there.</div>
-        <div class="qsc-time" id="qsc-time"></div>
       </div>
     `;
     const box = root.querySelector('#qsc-box');
     const title = root.querySelector('#qsc-title');
     const sub = root.querySelector('#qsc-sub');
-    const timeEl = root.querySelector('#qsc-time');
 
     function onMotion(e) {
       if (resolved) return;
@@ -145,9 +142,6 @@
         title.textContent = won ? '🏆 YOU WIN!' : lost ? '💥 YOU LOSE' : 'Duel over';
       }
       sub.textContent = 'Look at the TV for the replay.';
-      if (result.times && result.times[myId] != null) {
-        timeEl.textContent = result.times[myId] + ' ms';
-      }
       if (navigator.vibrate) navigator.vibrate(lost ? [0, 120, 60, 120] : won ? [0, 60] : []);
     }
 

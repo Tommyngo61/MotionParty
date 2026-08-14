@@ -71,52 +71,51 @@ it's the one action here that throws away an in-progress match.
 
 ## Running it
 
+**Quick start** — two terminals, no accounts, no LAN IP hunting:
+
 ```
 npm install
 npm start
 ```
 
-This starts one Express + Socket.IO server on port 3000 (override with `PORT=...`).
-
-- Put **`http://<server-ip>:3000/host/`** on the TV / big screen. It creates a room,
-  shows a QR code and 4-letter code, and is the game menu — the host itself is never
-  a player.
-- Players open **`http://<server-ip>:3000/player/`** (normally by scanning the QR
-  code), enter a name, pick an animal, and tap Join.
-- On the host, tap a game tile, choose a mode if there's one to choose (see
-  [Modes](#modes)), pick joined players, and hit Start.
-
-### ⚠️ Motion sensors need HTTPS
-
-Phone browsers only expose `DeviceMotionEvent`/`DeviceOrientationEvent` on a
-**secure context** — `https://` or `localhost`. Plain `http://192.168.x.x:3000` will
-load the pages fine, but the gyro/accelerometer permission prompt will silently fail
-on real phones. For LAN playtesting, put the server behind a quick HTTPS tunnel.
-
-**Option A — Cloudflare Tunnel** (no account needed):
-
 ```
-npm start
 npm run tunnel
 ```
 
-`npm run tunnel` runs a Cloudflare quick Tunnel (`cloudflared tunnel --url
-http://localhost:3000`) via the `cloudflared` dev dependency, so there's nothing to
-separately install and no account needed. It prints a random
-`https://<random-name>.trycloudflare.com` URL — use it on the phones for `/player/`
-and on the TV for `/host/`. The URL changes every time you restart the tunnel, and
-Cloudflare gives no uptime guarantee for these "quick" tunnels, so it's meant for
-playtesting, not a standing address.
+`npm run tunnel` runs a Cloudflare quick Tunnel via the `cloudflared` dev dependency
+— nothing extra to install, no login. It prints one
+`https://<random-name>.trycloudflare.com` URL; use that same URL for everything:
 
-**Option B — ngrok** (needs a free account + authtoken configured first):
+- **`<url>/host/`** on the TV / big screen — creates a room, shows a QR code and
+  4-letter join code, and is the game menu (the host itself is never a player).
+- **`<url>/player/`** on phones (normally by scanning the QR code) — enter a name,
+  pick an animal, tap Join.
+- On the host, tap a game tile, choose a mode if there's one to choose (see
+  [Modes](#modes)), pick joined players, and hit Start.
+
+This matters because phone browsers only expose `DeviceMotionEvent`/
+`DeviceOrientationEvent` — the tilt/swing controls — on a **secure context**
+(`https://` or `localhost`). Plain `http://192.168.x.x:3000` loads the pages fine,
+but the motion-permission prompt silently fails on real phones. The tunnel URL is
+HTTPS by default, so it sidesteps that entirely and this is the fastest path from
+clone to playable on real hardware.
+
+Two things worth knowing:
+- The tunnel URL changes every time you restart it, and Cloudflare gives no uptime
+  guarantee for these "quick" tunnels — fine for playtesting, not a standing address.
+- The server itself always runs on port 3000 regardless of the tunnel (override with
+  `PORT=...`); the tunnel just forwards HTTPS traffic to it, so the host screen can
+  still use plain `http://<lan-ip>:3000/host/` on your LAN if you'd rather skip the
+  tunnel for the TV and only use it for phones.
+
+**Alternative — ngrok** (needs a free account + authtoken configured first):
 
 ```
 npx ngrok http 3000
 ```
 
-Either way, use the printed `https://...` URL on the phones (the host screen can
-still use plain HTTP on your LAN if you prefer). For a real deployment, put this
-behind any HTTPS reverse proxy.
+Use the printed `https://...ngrok...` URL the same way. For a real deployment, put
+the server behind any HTTPS reverse proxy instead of a quick tunnel.
 
 On iOS, the motion-permission prompt only appears in response to a tap — that's why
 the Join button itself requests permission.
