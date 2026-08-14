@@ -97,11 +97,20 @@
       c1.classList.add('qs-still');
       c2.classList.add('qs-still');
     }, 2600);
-    setT(() => { caption.textContent = 'Wait for it…'; }, 3100);
+    let walkChoreoDone = false;
+    setT(() => { caption.textContent = 'Wait for it…'; walkChoreoDone = true; }, 3100);
 
     function setLight(color, text) {
       light.className = 'qs-light ' + (color || '');
       caption.textContent = text || '';
+    }
+
+    function onAimStatus({ readyIds }) {
+      if (!walkChoreoDone) return; // don't step on the walk-apart captions
+      const bothAimed = readyIds.includes(p1.id) && readyIds.includes(p2.id);
+      if (bothAimed) return; // the 'ready' state event is right behind this
+      const waitingOn = [p1, p2].filter((p) => !readyIds.includes(p.id)).map((p) => p.name);
+      caption.textContent = `Waiting for ${waitingOn.join(' & ')} to aim down…`;
     }
 
     function onState({ phase }) {
@@ -119,12 +128,14 @@
       showResult(root, result, { p1, p2, socket, roomCode, onExit, c1, c2, bracketMode, onMatchResult });
     }
 
+    socket.on('quickshoot:aimStatus', onAimStatus);
     socket.on('quickshoot:state', onState);
     socket.on('quickshoot:result', onResult);
 
     return {
       stop() {
         clearTimers();
+        socket.off('quickshoot:aimStatus', onAimStatus);
         socket.off('quickshoot:state', onState);
         socket.off('quickshoot:result', onResult);
       },

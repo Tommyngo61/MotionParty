@@ -24,6 +24,8 @@
 
   const READY_THRESHOLD = 55;   // deg/s rotation, or accel delta - trips false-start check
   const DRAW_THRESHOLD = 70;
+  const POINT_DOWN_Y = -7;      // accelerationIncludingGravity.y this negative == phone held vertical, top pointed at the ground
+  const POINT_DOWN_HOLD_MS = 250; // must sustain the pose this long before we call it confirmed
 
   function motionEnergy(e, baseline) {
     let rotMag = 0;
@@ -47,6 +49,8 @@
     let armed = false; // true once 'ready' received -> false-start watch active
     let resolved = false;
     let fireLocalTs = 0;
+    let aimSignaled = false; // true once we've told the server we're holding the aim-down pose
+    let pointDownSince = null;
     const baseline = { value: 9.8, samples: 0 };
 
     root.innerHTML = `
@@ -54,7 +58,7 @@
         <div class="qsc-icon">🤠</div>
         <div class="qsc-vs">${opponent ? 'Duel vs ' + escapeHtml(opponent.name) : 'Quick Draw Duel'}</div>
         <div class="qsc-title" id="qsc-title">Get in position…</div>
-        <div class="qsc-sub" id="qsc-sub">Hold your phone flat and still.</div>
+        <div class="qsc-sub" id="qsc-sub">Point your phone down at your side and hold it there.</div>
         <div class="qsc-time" id="qsc-time"></div>
       </div>
     `;
@@ -73,6 +77,21 @@
         baseline.samples++;
       }
       const energy = motionEnergy(e, baseline);
+
+      if (phase === 'walk' && !aimSignaled) {
+        const g = e.accelerationIncludingGravity;
+        if (g && g.y != null && g.y < POINT_DOWN_Y) {
+          if (pointDownSince == null) pointDownSince = performance.now();
+          else if (performance.now() - pointDownSince >= POINT_DOWN_HOLD_MS) {
+            aimSignaled = true;
+            socket.emit('quickshoot:aimReady');
+            title.textContent = 'Aimed!';
+            sub.textContent = 'Hold still — waiting for opponent…';
+          }
+        } else {
+          pointDownSince = null;
+        }
+      }
 
       if (phase === 'fire') {
         if (energy > DRAW_THRESHOLD) {

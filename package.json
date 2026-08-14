@@ -5,7 +5,8 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node server/index.js"
+    "dev": "node server/index.js",
+    "tunnel": "cloudflared tunnel --url http://localhost:3000"
   },
   "license": "MIT",
   "dependencies": {
@@ -15,6 +16,7 @@
     "socket.io": "^4.7.5"
   },
   "devDependencies": {
+    "cloudflared": "^0.7.3",
     "playwright": "^1.62.1"
   }
 }

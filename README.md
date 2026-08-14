@@ -96,14 +96,17 @@ on real phones. For LAN playtesting, put the server behind a quick HTTPS tunnel.
 **Option A — Cloudflare Tunnel** (no account needed):
 
 ```
-winget install --id Cloudflare.cloudflared -e
-cloudflared tunnel --url http://localhost:3000
+npm start
+npm run tunnel
 ```
 
-This prints a random `https://<words>.trycloudflare.com` URL — use it on the
-phones for `/player/` and on the TV for `/host/`. The URL changes every time you
-restart the tunnel, and Cloudflare gives no uptime guarantee for these "quick"
-tunnels, so it's meant for playtesting, not a standing address.
+`npm run tunnel` runs a Cloudflare quick Tunnel (`cloudflared tunnel --url
+http://localhost:3000`) via the `cloudflared` dev dependency, so there's nothing to
+separately install and no account needed. It prints a random
+`https://<random-name>.trycloudflare.com` URL — use it on the phones for `/player/`
+and on the TV for `/host/`. The URL changes every time you restart the tunnel, and
+Cloudflare gives no uptime guarantee for these "quick" tunnels, so it's meant for
+playtesting, not a standing address.
 
 **Option B — ngrok** (needs a free account + authtoken configured first):
 
@@ -198,7 +201,12 @@ Motion thresholds (swing sensitivity, draw sensitivity) are simple constants at 
 top of `public/player/controllers/tennis.js` and `quickshoot.js` — different phones
 report different accelerometer scales, so nudge `SWING_THRESHOLD` /
 `READY_THRESHOLD` / `DRAW_THRESHOLD` if a game feels too twitchy or too unresponsive
-on your hardware.
+on your hardware. 1-2-3 Shoot also won't advance past the walk-apart phase until both
+phones report holding the aim-down/holster pose (`POINT_DOWN_Y`, checked against
+`accelerationIncludingGravity.y` — around `-9.8` when a phone is held vertically with
+its top pointed at the ground, `+9.8` held upright) for `POINT_DOWN_HOLD_MS`; if a
+phone never confirms (e.g. motion permission denied) the round force-starts after
+`QS_AIM_FALLBACK` in `server/index.js` so the game can't hang forever.
 
 Stay on Track's difficulty lives in `public/shared/tracks.js` as `width` (how much
 drift is forgiven), `speed` (the *max* forward rate a full forward tilt can reach —
