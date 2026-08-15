@@ -275,13 +275,7 @@
   window.MP_TUTORIALS.quickshoot = {
     emoji: '🤠',
     title: '1-2-3 Shoot!',
-    steps: [
-      'Point your phone down at your side, like a holstered gun, and hold it there — the duel won\'t start until both players are aimed down.',
-      'Watch the light and the countdown on the TV. Stay still while it counts down.',
-      'The instant it turns green and says FIRE, flick your phone up to draw.',
-      'Draw before green and you lose instantly — fastest reaction after FIRE wins the duel.',
-    ],
-    animate: animateTutorial,
+    render: animateTutorial,
   };
 
   window.MP_GAMES = window.MP_GAMES || {};

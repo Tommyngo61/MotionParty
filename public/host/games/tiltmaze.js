@@ -180,13 +180,7 @@
   window.MP_TUTORIALS.tiltmaze = {
     emoji: '🧭',
     title: 'Tilt Maze',
-    steps: [
-      'Hold your phone flat — the race won\'t start until it\'s level, so nobody gets a head start.',
-      'Tilt your phone like a tray to roll the iron ball through the maze toward the hole.',
-      'The maze walls contain the ball — it can\'t fall off, but it does slide along walls with real momentum.',
-      'Everyone races at once; first to solve the Easy maze then the Hard maze wins.',
-    ],
-    animate: animateTutorial,
+    render: animateTutorial,
   };
 
   window.MP_GAMES = window.MP_GAMES || {};

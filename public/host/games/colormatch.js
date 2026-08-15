@@ -219,13 +219,7 @@
   window.MP_TUTORIALS.colormatch = {
     emoji: '🎨',
     title: 'Color Match Relay',
-    steps: [
-      'A color flashes on the TV — that\'s your target.',
-      'Run and find something in the room that\'s close to that color.',
-      'Point your phone\'s camera at it and tap Capture to photograph it.',
-      'You have a few seconds; everyone competes at once — the closest match wins the round.',
-    ],
-    animate: animateTutorial,
+    render: animateTutorial,
   };
 
   window.MP_GAMES = window.MP_GAMES || {};

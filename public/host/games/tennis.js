@@ -394,13 +394,7 @@
   window.MP_TUTORIALS.tennis = {
     emoji: '🎾',
     title: 'Motion Tennis',
-    steps: [
-      'Your character auto-moves into position on the court — you never need to walk it yourself.',
-      'When the ball is in range, swing your phone like a racket to hit it back.',
-      'Tilt left or right at the moment of the swing to steer where your return goes.',
-      'First to 5 points wins the match.',
-    ],
-    animate: animateTutorial,
+    render: animateTutorial,
   };
 
   window.MP_GAMES = window.MP_GAMES || {};

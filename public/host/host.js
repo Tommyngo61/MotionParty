@@ -49,7 +49,13 @@
     bracket: el('screen-bracket'),
   };
 
+  let stopTutorialStage = () => {};
+
   function showScreen(name) {
+    if (name !== 'select') {
+      stopTutorialStage();
+      stopTutorialStage = () => {};
+    }
     Object.values(screens).forEach((s) => s.classList.remove('active'));
     screens[name].classList.add('active');
   }
@@ -116,6 +122,8 @@
     renderSelectTitle();
     renderSelectList();
     showScreen('select');
+    stopTutorialStage();
+    stopTutorialStage = window.MP_renderTutorial(el('select-stage'), game);
   }
 
   function renderModeToggle() {
@@ -134,13 +142,7 @@
   function renderHowTo() {
     const info = GAME_INFO[pendingGame];
     el('select-howto').textContent = info ? info.howTo : '';
-    el('select-tutorial').style.display = window.MP_TUTORIALS && window.MP_TUTORIALS[pendingGame] ? 'inline-block' : 'none';
   }
-
-  el('select-tutorial').addEventListener('click', () => {
-    if (window.MP_Feedback) window.MP_Feedback.unlock();
-    window.MP_showTutorial(pendingGame);
-  });
 
   function renderSelectTitle() {
     const info = GAME_INFO[pendingGame];

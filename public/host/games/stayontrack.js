@@ -181,14 +181,7 @@
   window.MP_TUTORIALS.stayontrack = {
     emoji: '🛤️',
     title: 'Stay on Track',
-    steps: [
-      'Hold your phone flat, face up — the race won\'t start until it\'s level, so nobody gets a head start.',
-      'You move forward automatically. Tilt left or right to steer the ball along the path.',
-      'The ball has real momentum — tilt the other way to slow or reverse it, not just to stop.',
-      'Drift off the edge and you restart that track — Track 4 is a loop, so go around it twice.',
-      'Everyone races at once; first to clear all 4 tracks wins.',
-    ],
-    animate: animateTutorial,
+    render: animateTutorial,
   };
 
   window.MP_GAMES = window.MP_GAMES || {};
