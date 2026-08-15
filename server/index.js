@@ -41,6 +41,7 @@ const store = new RoomStore();
 
 // ---- Quickshoot (1-2-3 Shoot) timing constants (ms) ----
 const QS_WALK_DURATION = 3600; // must match the walk/turn animation on the host screen
+const QS_AIM_FALLBACK = 5000; // force-start past QS_WALK_DURATION if a phone never confirms aim-down (e.g. permission denied)
 const QS_COUNTDOWN_MS = 5000; // fixed ready-to-fire countdown, shown on host + phones
 const QS_RESULT_TIMEOUT = 3000; // grace period after FIRE before we declare a no-show
 
@@ -210,20 +211,17 @@ io.on('connection', (socket) => {
     });
   });
 
-  // Quickshoot: player moved too early
-  socket.on('quickshoot:groundReady', () => {
+  // Quickshoot: player has held their phone in the aim-down/holster pose long enough
+  socket.on('quickshoot:aimReady', () => {
     const room = store.getRoom(socket.data.roomCode);
     if (!room || room.currentGame !== 'quickshoot' || !room.gameState) return;
     const gs = room.gameState;
+    if (gs.phase !== 'walk') return;
     const playerId = socket.data.playerId;
-    if (!playerId) return;
-    gs.groundReady = gs.groundReady || {};
-    if (gs.groundReady[playerId]) return;
-    gs.groundReady[playerId] = true;
-
-    const ids = room.matchPlayers || [];
-    const allReady = ids.length > 0 && ids.every((id) => gs.groundReady[id]);
-    if (allReady) beginQuickshootCountdown(room);
+    if (!room.matchPlayers.includes(playerId)) return;
+    gs.aimReady.add(playerId);
+    io.to(room.code).emit('quickshoot:aimStatus', { readyIds: Array.from(gs.aimReady) });
+    tryAdvanceQuickshoot(room);
   });
 
   socket.on('quickshoot:falseStart', () => {
@@ -339,59 +337,75 @@ function publicPlayer(room, id) {
 
 function startQuickshoot(room) {
   const gs = room.gameState;
-  gs.phase = 'groundcheck';
-  gs.groundReady = {};
-  gs.timers = [];
-  io.to(room.code).emit('quickshoot:state', { phase: 'groundcheck', ts: Date.now() });
-}
-
-function beginQuickshootCountdown(room) {
-  const gs = room.gameState;
-  if (!gs || gs.resolved || gs.phase === 'walk' || gs.phase === 'countdown' || gs.phase === 'fire') return;
-
   gs.phase = 'walk';
   gs.timers = [];
+  gs.aimReady = new Set();
+  gs.walkMinElapsed = false;
+
+  // The walk/turn animation on the host screen always plays out in full...
+  gs.timers.push(
+    setTimeout(() => {
+      gs.walkMinElapsed = true;
+      tryAdvanceQuickshoot(room);
+    }, QS_WALK_DURATION)
+  );
+
+  // ...but the duel itself won't start its countdown until both phones confirm
+  // they're held in the aim-down/holster pose, up to a grace period in case a
+  // phone's motion permission was denied or its sensor never reports.
+  gs.timers.push(
+    setTimeout(() => {
+      if (gs.phase === 'walk') advanceQuickshootToCountdown(room);
+    }, QS_WALK_DURATION + QS_AIM_FALLBACK)
+  );
+}
+
+function tryAdvanceQuickshoot(room) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== 'walk' || !gs.walkMinElapsed) return;
+  const allAimed = room.matchPlayers.every((id) => gs.aimReady.has(id));
+  if (allAimed) advanceQuickshootToCountdown(room);
+}
+
+function advanceQuickshootToCountdown(room) {
+  const gs = room.gameState;
+  if (!gs || gs.phase !== 'walk') return;
+  gs.phase = 'countdown';
+  io.to(room.code).emit('quickshoot:state', { phase: 'countdown', ts: Date.now(), durationMs: QS_COUNTDOWN_MS });
 
   gs.timers.push(
     setTimeout(() => {
-      gs.phase = 'countdown';
-      io.to(room.code).emit('quickshoot:state', { phase: 'countdown', ts: Date.now(), durationMs: QS_COUNTDOWN_MS });
+      gs.phase = 'fire';
+      gs.results = {};
+      io.to(room.code).emit('quickshoot:state', { phase: 'fire', ts: Date.now() });
 
       gs.timers.push(
         setTimeout(() => {
-          gs.phase = 'fire';
-          gs.results = {};
-          io.to(room.code).emit('quickshoot:state', { phase: 'fire', ts: Date.now() });
-
-          gs.timers.push(
-            setTimeout(() => {
-              if (gs.resolved) return;
-              const ids = room.matchPlayers;
-              const results = gs.results || {};
-              const [a, b] = ids;
-              const aTime = results[a];
-              const bTime = results[b];
-              let winnerId = null;
-              let loserId = null;
-              if (aTime == null && bTime == null) {
-                resolveQuickshoot(room, { reason: 'noShow' });
-                return;
-              } else if (aTime == null) {
-                winnerId = b;
-                loserId = a;
-              } else if (bTime == null) {
-                winnerId = a;
-                loserId = b;
-              } else {
-                winnerId = aTime <= bTime ? a : b;
-                loserId = winnerId === a ? b : a;
-              }
-              resolveQuickshoot(room, { reason: 'timeout', winnerId, loserId, times: results });
-            }, QS_RESULT_TIMEOUT)
-          );
-        }, QS_COUNTDOWN_MS)
+          if (gs.resolved) return;
+          const ids = room.matchPlayers;
+          const results = gs.results || {};
+          const [a, b] = ids;
+          const aTime = results[a];
+          const bTime = results[b];
+          let winnerId = null;
+          let loserId = null;
+          if (aTime == null && bTime == null) {
+            resolveQuickshoot(room, { reason: 'noShow' });
+            return;
+          } else if (aTime == null) {
+            winnerId = b;
+            loserId = a;
+          } else if (bTime == null) {
+            winnerId = a;
+            loserId = b;
+          } else {
+            winnerId = aTime <= bTime ? a : b;
+            loserId = winnerId === a ? b : a;
+          }
+          resolveQuickshoot(room, { reason: 'timeout', winnerId, loserId, times: results });
+        }, QS_RESULT_TIMEOUT)
       );
-    }, QS_WALK_DURATION)
+    }, QS_COUNTDOWN_MS)
   );
 }
 

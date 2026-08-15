@@ -89,50 +89,54 @@ it's the one action here that throws away an in-progress match.
 
 ## Running it
 
+**Quick start** — two terminals, no accounts, no LAN IP hunting:
+
 ```
 npm install
 npm start
 ```
 
-This starts one Express + Socket.IO server on port 3000 (override with `PORT=...`).
+```
+npm run tunnel
+```
 
-- Put **`http://<server-ip>:3000/host/`** on the TV / big screen. It creates a room,
-  shows a QR code and 4-letter code, and is the game menu — the host itself is never
-  a player.
-- Players open **`http://<server-ip>:3000/player/`** (normally by scanning the QR
-  code), enter a name, pick an animal, and tap Join.
+`npm run tunnel` runs a Cloudflare quick Tunnel via the `cloudflared` dev dependency
+— nothing extra to install, no login. It prints one
+`https://<random-name>.trycloudflare.com` URL; use that same URL for everything:
+
+- **`<url>/host/`** on the TV / big screen — creates a room, shows a QR code and
+  4-letter join code, and is the game menu (the host itself is never a player).
+- **`<url>/player/`** on phones (normally by scanning the QR code) — enter a name,
+  pick an animal, tap Join.
 - On the host, tap a game tile, choose a mode if there's one to choose (see
   [Modes](#modes)), pick joined players, and hit Start.
 
 ### ⚠️ Motion sensors (and the camera) need HTTPS
 
-Phone browsers only expose `DeviceMotionEvent`/`DeviceOrientationEvent` - and
-`getUserMedia`, which Color Match Relay uses for the camera - on a **secure
-context**: `https://` or `localhost`. Plain `http://192.168.x.x:3000` will load the
-pages fine, but the gyro/accelerometer/camera permission prompts will silently fail
-on real phones. For LAN playtesting, put the server behind a quick HTTPS tunnel.
+This matters because phone browsers only expose `DeviceMotionEvent`/
+`DeviceOrientationEvent` (the tilt/swing controls) and `getUserMedia` (Color Match
+Relay's camera) on a **secure context** (`https://` or `localhost`). Plain
+`http://192.168.x.x:3000` loads the pages fine, but the motion/camera permission
+prompts silently fail on real phones. The tunnel URL is HTTPS by default, so it
+sidesteps that entirely and this is the fastest path from clone to playable on real
+hardware.
 
-**Option A — Cloudflare Tunnel** (no account needed):
+Two things worth knowing:
+- The tunnel URL changes every time you restart it, and Cloudflare gives no uptime
+  guarantee for these "quick" tunnels — fine for playtesting, not a standing address.
+- The server itself always runs on port 3000 regardless of the tunnel (override with
+  `PORT=...`); the tunnel just forwards HTTPS traffic to it, so the host screen can
+  still use plain `http://<lan-ip>:3000/host/` on your LAN if you'd rather skip the
+  tunnel for the TV and only use it for phones.
 
-```
-winget install --id Cloudflare.cloudflared -e
-cloudflared tunnel --url http://localhost:3000
-```
-
-This prints a random `https://<words>.trycloudflare.com` URL — use it on the
-phones for `/player/` and on the TV for `/host/`. The URL changes every time you
-restart the tunnel, and Cloudflare gives no uptime guarantee for these "quick"
-tunnels, so it's meant for playtesting, not a standing address.
-
-**Option B — ngrok** (needs a free account + authtoken configured first):
+**Alternative — ngrok** (needs a free account + authtoken configured first):
 
 ```
 npx ngrok http 3000
 ```
 
-Either way, use the printed `https://...` URL on the phones (the host screen can
-still use plain HTTP on your LAN if you prefer). For a real deployment, put this
-behind any HTTPS reverse proxy.
+Use the printed `https://...ngrok...` URL the same way. For a real deployment, put
+the server behind any HTTPS reverse proxy instead of a quick tunnel.
 
 On iOS, the motion-permission prompt only appears in response to a tap — that's why
 the Join button itself requests permission (`DeviceMotionEvent.requestPermission()`/
@@ -188,13 +192,15 @@ control feel unresponsive.
   loop. Phones detect a swing (an accelerometer peak) and send a `player:input`
   event; the server relays it to the host only, and the host decides whether the
   swing landed in the hit window.
-- **1-2-3 Shoot**: the *server* is authoritative for timing fairness — each phone
-  detects its own "pointed straight down" ground-lock via `devicemotion` and reports
-  it; once every player in the match has, the server runs a
-  groundcheck → walk → countdown → fire sequence (the countdown is a fixed
-  `QS_COUNTDOWN_MS`, not random) and broadcasts each phase to the host and every
-  phone at the same instant. Phones compute their own reaction time locally and
-  report it back; the server picks the winner and every screen renders the result.
+- **1-2-3 Shoot**: the *server* is authoritative for timing fairness. The walk/turn
+  animation plays out on its own timer while, in parallel, each phone watches for
+  the aim-down/holster pose (`accelerationIncludingGravity`, held for a beat) and
+  reports it; once both the animation has finished *and* every player in the match
+  has aimed (or a grace-period fallback expires, in case a phone's motion
+  permission was denied), the server starts a fixed `QS_COUNTDOWN_MS` countdown -
+  not random - and broadcasts each phase to the host and every phone at the same
+  instant. Phones compute their own reaction time locally and report it back; the
+  server picks the winner and every screen renders the result.
 - **Stay on Track**: each phone runs its own local tilt-maze simulation and canvas
   render (reading `deviceorientation` continuously, not just single gestures) so
   steering feels instant. The server only broadcasts the synchronized `GO` signal
@@ -240,13 +246,15 @@ Motion thresholds (swing sensitivity, draw sensitivity) are simple constants at 
 top of `public/player/controllers/tennis.js` and `quickshoot.js` — different phones
 report different accelerometer scales, so nudge `SWING_THRESHOLD` /
 `READY_THRESHOLD` / `DRAW_THRESHOLD` if a game feels too twitchy or too unresponsive
-on your hardware. `quickshoot.js`'s `isGroundAligned` (the "pointed straight down"
-ready check) reads the device's Y axis as the gravity-dominant one; if that reads
-backwards on some phones, widen its tolerance rather than trying to flip a sign -
-"vertical, pointing down" reads the same regardless of which way the phone is
-rotated around that axis, so there's no sign to flip. `QS_COUNTDOWN_MS` (fixed
-ready-to-fire countdown, replacing what used to be a random delay) lives in
-`server/index.js`, since the server owns match timing.
+on your hardware. 1-2-3 Shoot also won't advance past the walk-apart phase until both
+phones report holding the aim-down/holster pose (`POINT_DOWN_Y`, checked against
+`accelerationIncludingGravity.y` — around `-9.8` when a phone is held vertically with
+its top pointed at the ground, `+9.8` held upright) for `POINT_DOWN_HOLD_MS`; if a
+phone never confirms (e.g. motion permission denied) the round force-starts after
+`QS_AIM_FALLBACK` in `server/index.js` so the game can't hang forever. Once it does
+advance, `QS_COUNTDOWN_MS` (also in `server/index.js`) is the fixed ready-to-fire
+countdown - a deliberate replacement for what used to be a random delay, so the
+suspense is "will you jump the gun" rather than "did you guess the timing right".
 
 Stay on Track's canvas rendering (in `public/player/controllers/stayontrack.js`)
 uses a racetrack look - striped grass background, gray asphalt, red/white curb

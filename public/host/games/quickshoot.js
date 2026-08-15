@@ -16,6 +16,9 @@
         box-shadow:0 10px 24px rgba(0,0,0,.4);animation:qs-bob 0.5s ease-in-out infinite}
       .qs-char.qs-still .qs-avatar{animation:none}
       .qs-char .qs-label{margin-top:.5rem;font-weight:800;font-size:1.1rem;text-shadow:0 2px 0 #000}
+      .qs-char .qs-status{margin-top:.3rem;font-size:.9rem;font-weight:700;color:rgba(255,255,255,.55);
+        min-height:1.2rem;transition:color .2s}
+      .qs-char .qs-status.ready{color:var(--accent-green)}
       .qs-char .qs-time{margin-top:.2rem;font-size:1.4rem;font-weight:900;color:var(--accent-yellow)}
       @keyframes qs-bob{0%,100%{transform:translateY(0)}50%{transform:translateY(-8px)}}
       .qs-light{position:absolute;top:14px;left:50%;transform:translateX(-50%);width:34px;height:34px;
@@ -35,9 +38,11 @@
         text-shadow:0 0 12px rgba(0,0,0,.6);opacity:0;transform:scale(.4) rotate(-10deg)}
       .qs-pow.show{animation:qs-pow .6s ease-out forwards}
       @keyframes qs-pow{0%{opacity:0;transform:scale(.4) rotate(-10deg)}30%{opacity:1;transform:scale(1.2) rotate(6deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
-      .qs-result{position:absolute;inset:0;background:rgba(10,6,26,.9);display:flex;flex-direction:column;
-        align-items:center;justify-content:center;gap:1.2rem;text-align:center;padding:2rem}
-      .qs-result h1{font-size:2.4rem;margin:0}
+      .qs-result{position:absolute;left:50%;bottom:6%;transform:translateX(-50%);
+        background:rgba(20,14,40,.94);border-radius:20px;padding:1.2rem 2.2rem;display:flex;
+        flex-direction:column;align-items:center;gap:.8rem;text-align:center;max-width:92%;
+        box-shadow:0 14px 34px rgba(0,0,0,.5)}
+      .qs-result h1{font-size:2rem;margin:0}
       .qs-result .qs-sub{color:rgba(255,255,255,.65);font-size:1.1rem}
       .qs-result .qs-times{display:flex;gap:3rem;margin-top:.5rem}
       .qs-result .qs-times div{font-size:1.3rem;font-weight:700}
@@ -69,11 +74,13 @@
           <div class="qs-char" id="qs-p1" style="left:50%">
             <img class="qs-avatar" src="${avatarUrl(p1.avatarId)}" />
             <div class="qs-label">${escapeHtml(p1.name)}</div>
+            <div class="qs-status" id="qs-status-1">📵 aim phone down</div>
             <div class="qs-time" id="qs-time-1"></div>
           </div>
           <div class="qs-char" id="qs-p2" style="left:50%">
             <img class="qs-avatar" src="${avatarUrl(p2.avatarId)}" />
             <div class="qs-label">${escapeHtml(p2.name)}</div>
+            <div class="qs-status" id="qs-status-2">📵 aim phone down</div>
             <div class="qs-time" id="qs-time-2"></div>
           </div>
         </div>
@@ -86,6 +93,9 @@
     const countdownNum = root.querySelector('#qs-countdown-num');
     const c1 = root.querySelector('#qs-p1');
     const c2 = root.querySelector('#qs-p2');
+    const status1 = root.querySelector('#qs-status-1');
+    const status2 = root.querySelector('#qs-status-2');
+    const statusEls = { [p1.id]: status1, [p2.id]: status2 };
     let countdownInterval = null;
 
     // Walk-apart choreography (purely visual; timing mirrors the server's QS_WALK_DURATION)
@@ -109,10 +119,24 @@
       caption.textContent = text || '';
     }
 
+    function onAimStatus({ readyIds }) {
+      [p1, p2].forEach((p) => {
+        const el = statusEls[p.id];
+        if (!el) return;
+        if (readyIds.includes(p.id)) {
+          el.textContent = '✅ ready';
+          el.classList.add('ready');
+        } else {
+          el.textContent = '📵 aim phone down';
+          el.classList.remove('ready');
+        }
+      });
+    }
+
     function onState({ phase, ts, durationMs }) {
-      if (phase === 'groundcheck') setLight('red', 'Point both phones straight down');
-      else if (phase === 'walk') setLight('red', 'Back to back…');
-      else if (phase === 'countdown') {
+      if (phase === 'countdown') {
+        status1.textContent = '';
+        status2.textContent = '';
         clearInterval(countdownInterval);
         setLight('red', 'Get ready…');
         const endsAt = ts + durationMs;
@@ -136,6 +160,7 @@
       showResult(root, result, { p1, p2, socket, roomCode, onExit, c1, c2, bracketMode, onMatchResult });
     }
 
+    socket.on('quickshoot:aimStatus', onAimStatus);
     socket.on('quickshoot:state', onState);
     socket.on('quickshoot:result', onResult);
 
@@ -143,6 +168,7 @@
       stop() {
         clearInterval(countdownInterval);
         clearTimers();
+        socket.off('quickshoot:aimStatus', onAimStatus);
         socket.off('quickshoot:state', onState);
         socket.off('quickshoot:result', onResult);
       },
@@ -170,19 +196,13 @@
       if (times[p2.id] != null) root.querySelector('#qs-time-2').textContent = times[p2.id] + ' ms';
     }
 
-    let headline, sub;
+    let headline;
     if (reason === 'falseStart') {
-      headline = `🚫 ${byId[loserId] ? byId[loserId].name : 'Someone'} drew too early!`;
-      sub = `${byId[winnerId] ? byId[winnerId].name : 'Opponent'} wins by default.`;
+      headline = `${byId[winnerId] ? byId[winnerId].name : 'Opponent'} won — ${byId[loserId] ? byId[loserId].name : 'someone'} drew too early!`;
     } else if (reason === 'noShow') {
-      headline = "😴 Nobody drew!";
-      sub = "It's a draw — try again.";
-    } else if (reason === 'timeout' && byId[winnerId] && (!times || times[loserId] == null)) {
-      headline = `🏆 ${byId[winnerId].name} wins!`;
-      sub = `${byId[loserId] ? byId[loserId].name : 'Opponent'} never fired.`;
+      headline = "Nobody drew — it's a wash!";
     } else {
-      headline = `🏆 ${byId[winnerId] ? byId[winnerId].name : ''} wins the duel!`;
-      sub = 'Fastest reaction takes it.';
+      headline = `${byId[winnerId] ? byId[winnerId].name : 'Someone'} won!`;
     }
 
     const overlay = document.createElement('div');
@@ -190,7 +210,6 @@
     if (bracketMode) {
       overlay.innerHTML = `
         <h1>${escapeHtml(headline)}</h1>
-        <div class="qs-sub">${escapeHtml(sub)}</div>
         <div class="qs-sub">${winnerId ? 'Advancing the bracket…' : 'Replaying this match…'}</div>
       `;
       wrap.appendChild(overlay);
@@ -199,7 +218,6 @@
     }
     overlay.innerHTML = `
       <h1>${escapeHtml(headline)}</h1>
-      <div class="qs-sub">${escapeHtml(sub)}</div>
       <div class="qs-actions">
         <button class="btn ghost" id="qs-menu">Back to Menu</button>
         <button class="btn primary" id="qs-again">Play Again</button>
