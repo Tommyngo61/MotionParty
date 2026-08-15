@@ -25,13 +25,19 @@
       emoji: '🛤️',
       name: 'Stay on Track',
       freeForAll: true,
-      howTo: 'Hold your phone flat to start. Tilt forward/back to speed up or reverse, and left/right to steer a ball along a winding path without falling off — Track 4 is a loop, go around it twice. Everyone races at once; first to clear all 4 tracks wins.',
+      howTo: "Hold your phone flat to start. You move forward on your own — tilt left/right to steer a ball along a winding path without falling off — Track 4 is a loop, go around it twice. Everyone races at once; first to clear all 4 tracks wins.",
     },
     tiltmaze: {
       emoji: '🧭',
       name: 'Tilt Maze',
       freeForAll: true,
       howTo: "Hold your phone flat to start. Tilt it like a tray to roll an iron ball through a maze to the hole — it can't fall off, the maze walls contain it. Everyone races at once; first to solve the Easy maze then the Hard maze wins.",
+    },
+    colormatch: {
+      emoji: '🎨',
+      name: 'Color Match Relay',
+      freeForAll: true,
+      howTo: 'A color flashes on the TV — run and find something in the room that color, then photograph it with your phone camera within 5 seconds. Everyone competes at once; first close-enough match wins the round.',
     },
   };
 

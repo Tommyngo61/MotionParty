@@ -11,17 +11,17 @@
   // progress is counted in laps (0..laps) instead of 0..1, and the same wobble
   // formula is applied per-lap (progress passed to centerlineX wraps at 1 per lap).
   const TRACKS = [
-    { name: 'Track 1', type: 'linear', width: 0.56, speed: 0.5, wobble: [{ amp: 0.26, freq: 0.8, phase: 0 }] },
+    { name: 'Track 1', type: 'linear', width: 0.42, speed: 0.5, wobble: [{ amp: 0.26, freq: 0.8, phase: 0 }] },
     {
-      name: 'Track 2', type: 'linear', width: 0.44, speed: 0.55,
+      name: 'Track 2', type: 'linear', width: 0.34, speed: 0.55,
       wobble: [{ amp: 0.3, freq: 1.1, phase: 0.6 }, { amp: 0.08, freq: 2.4, phase: 0 }],
     },
     {
-      name: 'Track 3', type: 'linear', width: 0.34, speed: 0.6,
+      name: 'Track 3', type: 'linear', width: 0.26, speed: 0.6,
       wobble: [{ amp: 0.34, freq: 1.4, phase: 1.1 }, { amp: 0.1, freq: 3.0, phase: 2.0 }],
     },
     {
-      name: 'Track 4', type: 'loop', width: 0.34, speed: 0.35, laps: 2,
+      name: 'Track 4', type: 'loop', width: 0.26, speed: 0.35, laps: 2,
       wobble: [
         { amp: 0.18, freq: 1, phase: 0.3 },
         { amp: 0.06, freq: 2, phase: 1.4 },

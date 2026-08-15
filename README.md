@@ -8,28 +8,33 @@ name and an animal avatar, and play by swinging/aiming their phone.
 
 Motion Tennis and 1-2-3 Shoot! are 1v1 games - play a **Single Play** match between
 2 people, or run a **Tournament Bracket** (single-elimination, 3+ players). Stay on
-Track and Tilt Maze are **Free-for-all** races - any number of players compete at
-once, no bracket needed. See [Modes](#modes) below for how that choice works on the
-host screen.
+Track, Tilt Maze, and Color Match Relay are **Free-for-all** - any number of players
+compete at once, no bracket needed. See [Modes](#modes) below for how that choice
+works on the host screen.
 
 - **Motion Tennis** — Wii-Sports-style angled court. Your character auto-moves
   into position; you just swing your phone like a racket when the ball is in range.
   Tilt your phone left/right at the moment of the swing to steer the return.
-- **1-2-3 Shoot!** — Quick-draw duel. Both avatars walk three paces apart, turn to
-  face off, then a light goes red → orange → **green** at a random moment. Draw
-  (flick your phone up) after green — draw early and you lose instantly. Both
-  reaction times are shown, and the loser goes down in a cartoon "BANG!".
+- **1-2-3 Shoot!** — Quick-draw duel. Point your phone straight down (like a
+  holstered gun) - once every player's locked that stance, both avatars walk three
+  paces apart, turn to face off, and a fixed 5-second countdown runs before the
+  light goes **green**. Draw (flick your phone up) after green — draw early and
+  you lose instantly. Both reaction times are shown, and the loser goes down in a
+  cartoon "BANG!".
 - **Stay on Track** — Free-for-all balance race across 4 increasingly-tight courses,
   each rendered on your own screen (not the TV). Hold your phone flat when the race
-  starts - the race won't begin until it's level, so nobody gets a head start.
-  Tilt the phone forward/back to speed up or reverse, and left/right to steer a ball
-  along a winding path, which rolls with its own momentum rather than snapping to a
-  stop — full manual control, so you can slow down or backtrack to line up a tricky
-  turn. Drift off the edge and the ball visibly falls off the track, then restarts
-  *that* track from the beginning — no penalty beyond lost time. The first 3 tracks
-  scroll forward to a finish line; **Track 4 is a loop** shown whole on screen, and
-  you have to steer around it for 2 full laps to clear it. First to clear all 4
-  tracks wins; the host screen shows every racer's live progress bar.
+  starts - the race won't begin until it's level, so nobody gets a head start. You
+  move forward on your own; **tilt left/right is the only control**, steering a ball
+  along a winding path that rolls with its own momentum rather than snapping to a
+  stop. The whole track is shown at once, so the ball visibly drives from the
+  bottom of the screen up to the top as you make progress, instead of the track
+  scrolling underneath a ball that stays put. Drift off the edge and the ball
+  visibly falls off the track, then restarts *that* track from the beginning — no
+  penalty beyond lost time. The first 3 tracks end when the ball reaches the top of
+  the screen, then the next track picks up right away; **Track 4 is a loop** shown
+  whole on screen, and you have to steer around it for 2 full laps to clear it.
+  First to clear all 4 tracks wins; the host screen shows every racer's live
+  progress bar.
 - **Tilt Maze** — Free-for-all race to roll an iron ball through a maze to the hole,
   on your own screen (not the TV), across an Easy maze then a Hard one. Hold your
   phone flat to start, then tilt it like a tray — the ball rolls with real momentum
@@ -39,6 +44,18 @@ host screen.
   branch off it is a genuine dead end) but seeded, so every racer gets an identical
   layout. First to solve both mazes wins; the host screen shows every racer's live
   progress bar.
+- **Color Match Relay** — Free-for-all. The TV flashes a target color; everyone
+  grabs their phone, runs off to find something in the room that color, and
+  photographs it within 5 seconds. Each photo is scored by averaging the pixels in
+  a center sample square against the target (using a perceptually-weighted color
+  distance, not naive RGB subtraction) and shown as a match percentage — first
+  player to clear the match threshold wins the round outright; if nobody does, the
+  closest attempt when time runs out wins instead. Needs camera access (prompted
+  with a tap, the same as the motion-permission prompt — see below); if it's never
+  granted, the round still runs and just times out for that player instead of
+  hanging. The result screen shows everyone's captured swatch side by side, best
+  match first, so you can see just how far off that "definitely maroon" sock really
+  was.
 - **Fruit Ninja** — on the menu as "coming soon", intentionally skipped for now.
 
 All character art is hand-drawn as plain SVG shapes in `public/shared/avatars.js` —
@@ -61,8 +78,9 @@ anyone starts.
   Again" when it ends - until a single champion remains. A drawn/no-show 1-2-3
   Shoot! match (nobody drew) just replays instead of advancing, since a bracket
   match can't end in a tie.
-- **Free-for-all** (Stay on Track / Tilt Maze only) — no mode choice; pick any
-  number of joined players (no upper limit) and everyone races at once.
+- **Free-for-all** (Stay on Track / Tilt Maze / Color Match Relay only) — no mode
+  choice; pick any number of joined players (no upper limit) and everyone
+  competes at once.
 
 **End Game**, visible in the top corner during any live match (and as *End
 Tournament* on the bracket screen), immediately aborts the current game or
@@ -86,11 +104,12 @@ This starts one Express + Socket.IO server on port 3000 (override with `PORT=...
 - On the host, tap a game tile, choose a mode if there's one to choose (see
   [Modes](#modes)), pick joined players, and hit Start.
 
-### ⚠️ Motion sensors need HTTPS
+### ⚠️ Motion sensors (and the camera) need HTTPS
 
-Phone browsers only expose `DeviceMotionEvent`/`DeviceOrientationEvent` on a
-**secure context** — `https://` or `localhost`. Plain `http://192.168.x.x:3000` will
-load the pages fine, but the gyro/accelerometer permission prompt will silently fail
+Phone browsers only expose `DeviceMotionEvent`/`DeviceOrientationEvent` - and
+`getUserMedia`, which Color Match Relay uses for the camera - on a **secure
+context**: `https://` or `localhost`. Plain `http://192.168.x.x:3000` will load the
+pages fine, but the gyro/accelerometer/camera permission prompts will silently fail
 on real phones. For LAN playtesting, put the server behind a quick HTTPS tunnel.
 
 **Option A — Cloudflare Tunnel** (no account needed):
@@ -116,15 +135,20 @@ still use plain HTTP on your LAN if you prefer). For a real deployment, put this
 behind any HTTPS reverse proxy.
 
 On iOS, the motion-permission prompt only appears in response to a tap — that's why
-the Join button itself requests permission.
+the Join button itself requests permission (`DeviceMotionEvent.requestPermission()`/
+`DeviceOrientationEvent.requestPermission()`, see `MP_requestMotionPermission` in
+`public/player/player.js`). Color Match Relay's camera access follows the same
+rule and gets its own tap-triggered "Enable Camera" button for the same reason -
+just calling `getUserMedia` on mount, without a preceding tap, doesn't reliably
+prompt either.
 
 ## Project layout
 
 ```
 server/
   index.js     Express static hosting + Socket.IO: rooms, lobby, relay, and the
-               server-authoritative 1-2-3 Shoot / Stay on Track / Tilt Maze timing
-               state machines.
+               server-authoritative 1-2-3 Shoot / Stay on Track / Tilt Maze /
+               Color Match Relay timing state machines.
   rooms.js     In-memory room/player store.
 
 public/
@@ -132,20 +156,24 @@ public/
   shared/avatars.js  Hand-coded SVG animal avatars, shared by both apps.
   shared/tracks.js   Procedural course definitions for Stay on Track, shared by both apps.
   shared/mazes.js    Seeded procedural maze generation for Tilt Maze, shared by both apps.
+  shared/colors.js   Color-distance math for Color Match Relay, shared by both apps.
 
   host/              The big-screen app: lobby, QR code, game menu, player-select,
-    host.js          and game rendering (Canvas 2D for Tennis, DOM/CSS for the rest).
+    host.js          bracket orchestration, and game rendering (Canvas 2D for
+                     Tennis, DOM/CSS for the rest).
     games/tennis.js
     games/quickshoot.js
     games/stayontrack.js
     games/tiltmaze.js
+    games/colormatch.js
 
   player/            The phone app: join flow, avatar picker, and per-game
-    player.js        controllers that read devicemotion/deviceorientation and
-    controllers/tennis.js      send input to the host/server over the socket.
+    player.js        controllers that read devicemotion/deviceorientation/camera
+    controllers/tennis.js      and send input to the host/server over the socket.
     controllers/quickshoot.js
     controllers/stayontrack.js
     controllers/tiltmaze.js
+    controllers/colormatch.js
 ```
 
 ### How input flows
@@ -160,9 +188,12 @@ control feel unresponsive.
   loop. Phones detect a swing (an accelerometer peak) and send a `player:input`
   event; the server relays it to the host only, and the host decides whether the
   swing landed in the hit window.
-- **1-2-3 Shoot**: the *server* is authoritative for timing fairness — it runs the
-  walk → ready → set → fire sequence and broadcasts each phase to the host and both
-  phones at the same instant. Phones compute their own reaction time locally and
+- **1-2-3 Shoot**: the *server* is authoritative for timing fairness — each phone
+  detects its own "pointed straight down" ground-lock via `devicemotion` and reports
+  it; once every player in the match has, the server runs a
+  groundcheck → walk → countdown → fire sequence (the countdown is a fixed
+  `QS_COUNTDOWN_MS`, not random) and broadcasts each phase to the host and every
+  phone at the same instant. Phones compute their own reaction time locally and
   report it back; the server picks the winner and every screen renders the result.
 - **Stay on Track**: each phone runs its own local tilt-maze simulation and canvas
   render (reading `deviceorientation` continuously, not just single gestures) so
@@ -177,11 +208,22 @@ control feel unresponsive.
   countdown and arbitrates the win off the first `tiltmaze:finish`, and phones relay
   live maze-index/progress over the generic `player:input` channel for the host's
   progress bar.
+- **Color Match Relay**: the *server* picks the target color (so it can't be
+  spoofed) and is authoritative for winning - each phone samples its own captured
+  photo and computes its own match distance locally (so there's no latency between
+  taking the photo and seeing your own result), but only the server's
+  `colormatch:submit` handler decides whether that distance actually clears the
+  match threshold and, if so, declares that player the winner. Non-winning attempts
+  are still relayed to the host over the generic `player:input` channel so it can
+  show everyone's live "trying…" swatch, and are kept server-side as each player's
+  best attempt in case the round times out with nobody clearing the threshold -
+  the closest overall attempt wins instead.
 
-Stay on Track and Tilt Maze are free-for-all: any number of racers can be in
-`room.matchPlayers`, "winner" is just whoever's `*:finish` the server sees first,
-and there's no `loserId` in the result event - it wouldn't mean anything with more
-than one non-winner.
+Stay on Track, Tilt Maze, and Color Match Relay are free-for-all: any number of
+racers can be in `room.matchPlayers`, "winner" is just whoever's server-arbitrated
+win condition triggers first (or closest, on a Color Match Relay timeout), and
+there's no `loserId` in any of their result events - it wouldn't mean anything with
+more than one non-winner.
 
 **Tournament brackets need zero server changes.** The server only ever runs one
 plain 2-player match at a time (`host:setMatchPlayers` + `host:startMatch`), exactly
@@ -198,10 +240,19 @@ Motion thresholds (swing sensitivity, draw sensitivity) are simple constants at 
 top of `public/player/controllers/tennis.js` and `quickshoot.js` — different phones
 report different accelerometer scales, so nudge `SWING_THRESHOLD` /
 `READY_THRESHOLD` / `DRAW_THRESHOLD` if a game feels too twitchy or too unresponsive
-on your hardware.
+on your hardware. `quickshoot.js`'s `isGroundAligned` (the "pointed straight down"
+ready check) reads the device's Y axis as the gravity-dominant one; if that reads
+backwards on some phones, widen its tolerance rather than trying to flip a sign -
+"vertical, pointing down" reads the same regardless of which way the phone is
+rotated around that axis, so there's no sign to flip. `QS_COUNTDOWN_MS` (fixed
+ready-to-fire countdown, replacing what used to be a random delay) lives in
+`server/index.js`, since the server owns match timing.
 
-Stay on Track's difficulty lives in `public/shared/tracks.js` as `width` (how much
-drift is forgiven), `speed` (the *max* forward rate a full forward tilt can reach —
+Stay on Track's canvas rendering (in `public/player/controllers/stayontrack.js`)
+uses a racetrack look - striped grass background, gray asphalt, red/white curb
+stripes (`drawGrass`/`strokeCurb`) - the ball itself is unchanged. Its difficulty
+lives in `public/shared/tracks.js` as `width` (how much drift is forgiven), `speed`
+(the *max* forward rate a full forward tilt can reach —
 players control their own pace, so this is a ceiling, not an autopilot), and
 `wobble` (sine terms that build the winding centerline the player has to follow).
 `type: 'loop'` plus a `laps` count turns a track into a closed circuit shown whole
@@ -220,12 +271,11 @@ has real weight, instead of stopping the instant the phone goes level; raise
 `STEER_DAMPING` if it feels too slippery, but keep it well under `STEER_ACCEL`'s
 useful range or it goes back to feeling snappy instead of rolling.
 
-Forward/back speed control has its own constants alongside those: `MAX_PITCH_DEG`
-(how far from level counts as full speed), `PITCH_DEADZONE_DEG` (how much
-accidental pitch near level is ignored), and `PITCH_SIGN` (flip this to `1` if
-forward/back tilt feels inverted on your device). `START_FLAT_DEG` is separate -
-it's how level (on both axes) a phone must be before the race is allowed to start,
-so nobody gets a head start from already being tilted when the countdown ends.
+Forward movement is automatic, driven entirely by each track's `speed` - tilt
+left/right is the only input. `START_FLAT_DEG` gates the *start* of the race (both
+axes must be level before the countdown-triggered `GO` actually starts the ball
+moving), so nobody gets a head start from already being tilted when it ends; it's
+unrelated to steering itself, which only reads gamma (left/right).
 
 Tilt Maze's difficulty lives in `public/shared/mazes.js` as `cols`/`rows` (grid
 size - bigger means more turns and longer dead ends) and `seed` (which layout the
@@ -237,6 +287,20 @@ steering, above. `BALL_R` and `WALL_HALF` (both in maze cell-units) size the
 collision circle and wall thickness for the slide-off-walls physics - if you
 shrink the maze's corridor width relative to those, tight turns can pinch the ball
 to a stop instead of letting it slide through.
+
+Color Match Relay's timing (`CM_COUNTDOWN_MS`, `CM_ROUND_MS`) and its target
+palette (`CM_PALETTE`) live in `server/index.js`, since the server is what picks
+the target color. `CM_MATCH_THRESHOLD` there is the "redmean" color-distance
+(0..~764, see `public/shared/colors.js`) a captured photo must beat to count as a
+match - **it's duplicated** as `MATCH_THRESHOLD` in
+`public/player/controllers/colormatch.js` purely so the phone can show instant
+local "match!"/"try again" feedback without waiting on a round-trip; the server's
+copy is the one that's actually authoritative, so keep the two in sync if you
+retune it. Raise the threshold if real phone cameras/lighting are making close
+matches read as misses; lower it if matches feel too easy. `SAMPLE_FRAC` in the
+same file controls how big a square (as a fraction of the shorter video
+dimension) gets averaged into the sampled color - matches the `.cmc-reticle`
+outline shown on the viewfinder, so change them together.
 
 ## Adding the next game
 

@@ -41,8 +41,7 @@ const store = new RoomStore();
 
 // ---- Quickshoot (1-2-3 Shoot) timing constants (ms) ----
 const QS_WALK_DURATION = 3600; // must match the walk/turn animation on the host screen
-const QS_READY_DELAY = [1000, 2200];
-const QS_SET_DELAY = [900, 2100];
+const QS_COUNTDOWN_MS = 5000; // fixed ready-to-fire countdown, shown on host + phones
 const QS_RESULT_TIMEOUT = 3000; // grace period after FIRE before we declare a no-show
 
 // ---- Stay on Track timing constants (ms) ----
@@ -51,9 +50,25 @@ const SOT_COUNTDOWN_MS = 3000; // must match the 3-2-1-GO countdown shown on hos
 // ---- Tilt Maze timing constants (ms) ----
 const TM_COUNTDOWN_MS = 3000; // must match the 3-2-1-GO countdown shown on host + phones
 
-function rand(min, max) {
-  return Math.floor(min + Math.random() * (max - min));
-}
+// ---- Color Match Relay timing/tuning ----
+const CM_COUNTDOWN_MS = 3000; // must match the 3-2-1-GO countdown shown on host + phones
+const CM_ROUND_MS = 5000; // time to find + photograph a matching object
+// Server picks the target color (rather than trusting a client), so it can't be
+// spoofed and every screen is guaranteed to show the same one.
+const CM_PALETTE = [
+  { name: 'Red', hex: '#e53935' },
+  { name: 'Orange', hex: '#fb8c00' },
+  { name: 'Yellow', hex: '#fdd835' },
+  { name: 'Green', hex: '#43a047' },
+  { name: 'Blue', hex: '#1e88e5' },
+  { name: 'Purple', hex: '#8e24aa' },
+  { name: 'Pink', hex: '#ec407a' },
+  { name: 'Brown', hex: '#6d4c41' },
+];
+// "redmean" distance (0..~764) below which a captured color counts as a real match -
+// mirrors public/shared/colors.js's colorDistance, kept generous since a phone
+// camera's white balance/lighting skews colors a fair amount.
+const CM_MATCH_THRESHOLD = 110;
 
 function clearGameTimers(room) {
   if (room.gameState && room.gameState.timers) {
@@ -103,7 +118,7 @@ io.on('connection', (socket) => {
   socket.on('host:startMatch', ({ code, game }) => {
     const room = store.getRoom(code);
     if (!room || room.hostSocketId !== socket.id) return;
-    const isFreeForAll = game === 'stayontrack' || game === 'tiltmaze';
+    const isFreeForAll = game === 'stayontrack' || game === 'tiltmaze' || game === 'colormatch';
     const minPlayers = isFreeForAll ? 1 : 2;
     const maxPlayers = isFreeForAll ? Infinity : 2;
     if (!room.matchPlayers || room.matchPlayers.length < minPlayers || room.matchPlayers.length > maxPlayers) return;
@@ -121,6 +136,8 @@ io.on('connection', (socket) => {
       startStayOnTrack(room);
     } else if (game === 'tiltmaze') {
       startTiltMaze(room);
+    } else if (game === 'colormatch') {
+      startColorMatch(room);
     }
   });
 
@@ -194,6 +211,21 @@ io.on('connection', (socket) => {
   });
 
   // Quickshoot: player moved too early
+  socket.on('quickshoot:groundReady', () => {
+    const room = store.getRoom(socket.data.roomCode);
+    if (!room || room.currentGame !== 'quickshoot' || !room.gameState) return;
+    const gs = room.gameState;
+    const playerId = socket.data.playerId;
+    if (!playerId) return;
+    gs.groundReady = gs.groundReady || {};
+    if (gs.groundReady[playerId]) return;
+    gs.groundReady[playerId] = true;
+
+    const ids = room.matchPlayers || [];
+    const allReady = ids.length > 0 && ids.every((id) => gs.groundReady[id]);
+    if (allReady) beginQuickshootCountdown(room);
+  });
+
   socket.on('quickshoot:falseStart', () => {
     const room = store.getRoom(socket.data.roomCode);
     if (!room || room.currentGame !== 'quickshoot' || !room.gameState) return;
@@ -252,6 +284,32 @@ io.on('connection', (socket) => {
     });
   });
 
+  // Color Match Relay: a player photographed something and we scored how close its
+  // sampled color is to the target. First to clear the match threshold wins outright;
+  // otherwise everyone's best attempt is kept for the round-timeout fallback.
+  socket.on('colormatch:submit', ({ hex, distance }) => {
+    const room = store.getRoom(socket.data.roomCode);
+    if (!room || room.currentGame !== 'colormatch' || !room.gameState) return;
+    const gs = room.gameState;
+    if (gs.resolved || gs.phase !== 'racing') return;
+    const playerId = socket.data.playerId;
+    if (!playerId) return;
+    const clamped = Math.max(0, Math.min(1000, Number(distance)));
+    if (!Number.isFinite(clamped)) return;
+    if (!gs.attempts[playerId] || clamped < gs.attempts[playerId].distance) {
+      gs.attempts[playerId] = { hex: String(hex || '').slice(0, 9), distance: clamped };
+    }
+    if (clamped <= CM_MATCH_THRESHOLD) {
+      gs.resolved = true;
+      clearGameTimers(room);
+      io.to(room.code).emit('colormatch:result', {
+        winnerId: playerId,
+        winnerDistance: Math.round(clamped),
+        attempts: gs.attempts,
+      });
+    }
+  });
+
   // ---------------- DISCONNECT ----------------
   socket.on('disconnect', () => {
     const result = store.removeBySocket(socket.id);
@@ -281,54 +339,57 @@ function publicPlayer(room, id) {
 
 function startQuickshoot(room) {
   const gs = room.gameState;
+  gs.phase = 'groundcheck';
+  gs.groundReady = {};
+  gs.timers = [];
+  io.to(room.code).emit('quickshoot:state', { phase: 'groundcheck', ts: Date.now() });
+}
+
+function beginQuickshootCountdown(room) {
+  const gs = room.gameState;
+  if (!gs || gs.resolved || gs.phase === 'walk' || gs.phase === 'countdown' || gs.phase === 'fire') return;
+
   gs.phase = 'walk';
   gs.timers = [];
 
   gs.timers.push(
     setTimeout(() => {
-      gs.phase = 'ready';
-      io.to(room.code).emit('quickshoot:state', { phase: 'ready', ts: Date.now() });
+      gs.phase = 'countdown';
+      io.to(room.code).emit('quickshoot:state', { phase: 'countdown', ts: Date.now(), durationMs: QS_COUNTDOWN_MS });
 
       gs.timers.push(
         setTimeout(() => {
-          gs.phase = 'set';
-          io.to(room.code).emit('quickshoot:state', { phase: 'set', ts: Date.now() });
+          gs.phase = 'fire';
+          gs.results = {};
+          io.to(room.code).emit('quickshoot:state', { phase: 'fire', ts: Date.now() });
 
           gs.timers.push(
             setTimeout(() => {
-              gs.phase = 'fire';
-              gs.results = {};
-              io.to(room.code).emit('quickshoot:state', { phase: 'fire', ts: Date.now() });
-
-              gs.timers.push(
-                setTimeout(() => {
-                  if (gs.resolved) return;
-                  const ids = room.matchPlayers;
-                  const results = gs.results || {};
-                  const [a, b] = ids;
-                  const aTime = results[a];
-                  const bTime = results[b];
-                  let winnerId = null;
-                  let loserId = null;
-                  if (aTime == null && bTime == null) {
-                    resolveQuickshoot(room, { reason: 'noShow' });
-                    return;
-                  } else if (aTime == null) {
-                    winnerId = b;
-                    loserId = a;
-                  } else if (bTime == null) {
-                    winnerId = a;
-                    loserId = b;
-                  } else {
-                    winnerId = aTime <= bTime ? a : b;
-                    loserId = winnerId === a ? b : a;
-                  }
-                  resolveQuickshoot(room, { reason: 'timeout', winnerId, loserId, times: results });
-                }, QS_RESULT_TIMEOUT)
-              );
-            }, rand(QS_SET_DELAY[0], QS_SET_DELAY[1]))
+              if (gs.resolved) return;
+              const ids = room.matchPlayers;
+              const results = gs.results || {};
+              const [a, b] = ids;
+              const aTime = results[a];
+              const bTime = results[b];
+              let winnerId = null;
+              let loserId = null;
+              if (aTime == null && bTime == null) {
+                resolveQuickshoot(room, { reason: 'noShow' });
+                return;
+              } else if (aTime == null) {
+                winnerId = b;
+                loserId = a;
+              } else if (bTime == null) {
+                winnerId = a;
+                loserId = b;
+              } else {
+                winnerId = aTime <= bTime ? a : b;
+                loserId = winnerId === a ? b : a;
+              }
+              resolveQuickshoot(room, { reason: 'timeout', winnerId, loserId, times: results });
+            }, QS_RESULT_TIMEOUT)
           );
-        }, rand(QS_READY_DELAY[0], QS_READY_DELAY[1]))
+        }, QS_COUNTDOWN_MS)
       );
     }, QS_WALK_DURATION)
   );
@@ -358,6 +419,42 @@ function startTiltMaze(room) {
       io.to(room.code).emit('tiltmaze:go', { ts: Date.now() });
     }, TM_COUNTDOWN_MS)
   );
+}
+
+function startColorMatch(room) {
+  const gs = room.gameState;
+  gs.phase = 'countdown';
+  gs.timers = [];
+  gs.attempts = {}; // playerId -> { hex, distance } - each player's closest attempt
+  gs.target = CM_PALETTE[Math.floor(Math.random() * CM_PALETTE.length)];
+  gs.timers.push(
+    setTimeout(() => {
+      if (gs.resolved) return;
+      gs.phase = 'racing';
+      io.to(room.code).emit('colormatch:go', { target: gs.target, roundMs: CM_ROUND_MS, ts: Date.now() });
+      gs.timers.push(setTimeout(() => finishColorMatchRound(room), CM_ROUND_MS));
+    }, CM_COUNTDOWN_MS)
+  );
+}
+
+function finishColorMatchRound(room) {
+  const gs = room.gameState;
+  if (gs.resolved) return;
+  gs.resolved = true;
+  clearGameTimers(room);
+  let winnerId = null;
+  let bestDistance = Infinity;
+  for (const [playerId, attempt] of Object.entries(gs.attempts)) {
+    if (attempt.distance < bestDistance) {
+      bestDistance = attempt.distance;
+      winnerId = playerId;
+    }
+  }
+  io.to(room.code).emit('colormatch:result', {
+    winnerId,
+    winnerDistance: winnerId ? Math.round(bestDistance) : null,
+    attempts: gs.attempts,
+  });
 }
 
 function resolveQuickshoot(room, result) {

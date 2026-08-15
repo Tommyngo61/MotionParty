@@ -31,17 +31,10 @@
   const STEER_ACCEL = 3.8;
   const STEER_DAMPING = 0.9;
   const MAX_STEER_VEL = 1.8;
-  const MAX_PITCH_DEG = 30;     // beta (forward/back) range from level mapped to full speed
-  const PITCH_DEADZONE_DEG = 4; // ignore tiny unintentional pitch near level
-  // Tilting the top of the phone away from you speeds the ball up; flip this to 1 if
-  // it feels backwards on your device.
-  const PITCH_SIGN = -1;
   const START_FLAT_DEG = 12;    // both axes must be within this of level to start the race
   const FALL_PAUSE_MS = 900;
   const FALL_DROP_PX = 160;
   const PROGRESS_RELAY_MS = 180;
-  const BALL_Y_FRAC = 0.74;
-  const VISIBLE_SCALE = 0.6;
   const LOOP_RX_FRAC = 0.34;
   const LOOP_RY_FRAC = 0.3;
 
@@ -99,13 +92,6 @@
       if (typeof e.beta === 'number') lastBeta = e.beta;
     }
     window.addEventListener('deviceorientation', onOrientation);
-
-    function pitchSpeedMult() {
-      const mag = Math.abs(lastBeta);
-      if (mag < PITCH_DEADZONE_DEG) return 0;
-      const norm = Math.min(1, (mag - PITCH_DEADZONE_DEG) / (MAX_PITCH_DEG - PITCH_DEADZONE_DEG));
-      return PITCH_SIGN * Math.sign(lastBeta) * norm;
-    }
 
     function isFlatEnough() {
       return Math.abs(lastBeta) < START_FLAT_DEG && Math.abs(lastGamma) < START_FLAT_DEG;
@@ -251,8 +237,8 @@
       ballVelX = Math.max(-MAX_STEER_VEL, Math.min(MAX_STEER_VEL, ballVelX));
       ballX += ballVelX * dt;
 
-      // forward/back tilt controls speed - forward speeds up, back slows/reverses
-      progress = Math.max(0, progress + pitchSpeedMult() * track.speed * dt);
+      // Forward movement is automatic - this game is left/right steering only.
+      progress += track.speed * dt;
 
       const required = requiredProgressFor(track);
       if (progress >= required) {
@@ -281,7 +267,34 @@
         const r = 1 + ballX;
         return { x: W / 2 + Math.cos(theta) * r * loopRX(), y: H / 2 + Math.sin(theta) * r * loopRY() };
       }
-      return { x: screenXFor(ballX), y: BALL_Y_FRAC * H };
+      // The whole track is shown at once (progress 0 at the bottom, 1 at the top),
+      // so the ball itself visibly drives up toward the finish, rather than staying
+      // put while the track scrolls past underneath it.
+      return { x: screenXFor(ballX), y: (1 - progress) * H };
+    }
+
+    // Mowed-lawn stripes for the grass surrounding the track (racetrack look).
+    function drawGrass() {
+      const stripes = 10;
+      const stripeH = H / stripes;
+      for (let i = 0; i < stripes; i++) {
+        c2d.fillStyle = i % 2 === 0 ? '#3f9142' : '#379139';
+        c2d.fillRect(0, i * stripeH, W, stripeH + 1);
+      }
+    }
+
+    // Classic red/white racing-curb stroke, applied to whatever path is currently
+    // built on the context (stroke() doesn't clear the current path, so this can
+    // run right after a fill() or another stroke() on the same shape).
+    function strokeCurb(lineWidth) {
+      c2d.setLineDash([]);
+      c2d.strokeStyle = '#fff';
+      c2d.lineWidth = lineWidth;
+      c2d.stroke();
+      c2d.strokeStyle = '#e53935';
+      c2d.setLineDash([lineWidth * 2, lineWidth * 2]);
+      c2d.stroke();
+      c2d.setLineDash([]);
     }
 
     function drawBallAt(bx, by, scale, alpha, isFalling) {
@@ -302,16 +315,17 @@
     }
 
     function drawLinear(track) {
-      c2d.fillStyle = '#bdeaff';
-      c2d.fillRect(0, 0, W, H);
-      const rows = 48;
+      drawGrass();
+      // The whole track (progress 0..1) is laid out top-to-bottom in one static
+      // view - it never scrolls, only the ball moves through it - so each row maps
+      // straight to a world progress value, independent of the ball's current spot.
+      const rows = 64;
       const leftPts = [];
       const rightPts = [];
       for (let i = 0; i <= rows; i++) {
         const rf = i / rows;
-        const rowProgress = progress + (BALL_Y_FRAC - rf) * VISIBLE_SCALE;
-        const cl = centerlineX(trackIndex, rowProgress);
-        const y = rf * H;
+        const cl = centerlineX(trackIndex, rf);
+        const y = (1 - rf) * H;
         leftPts.push([screenXFor(cl - track.width / 2), y]);
         rightPts.push([screenXFor(cl + track.width / 2), y]);
       }
@@ -320,21 +334,18 @@
       for (const p of leftPts) c2d.lineTo(p[0], p[1]);
       for (let i = rightPts.length - 1; i >= 0; i--) c2d.lineTo(rightPts[i][0], rightPts[i][1]);
       c2d.closePath();
-      c2d.fillStyle = '#2b6f5c';
+      c2d.fillStyle = '#54585e';
       c2d.fill();
-      c2d.strokeStyle = '#ffd23f';
-      c2d.lineWidth = 3;
       c2d.beginPath();
       leftPts.forEach((p, i) => (i === 0 ? c2d.moveTo(p[0], p[1]) : c2d.lineTo(p[0], p[1])));
-      c2d.stroke();
+      strokeCurb(4);
       c2d.beginPath();
       rightPts.forEach((p, i) => (i === 0 ? c2d.moveTo(p[0], p[1]) : c2d.lineTo(p[0], p[1])));
-      c2d.stroke();
+      strokeCurb(4);
     }
 
     function drawLoop(track) {
-      c2d.fillStyle = '#bdeaff';
-      c2d.fillRect(0, 0, W, H);
+      drawGrass();
       const cx = W / 2, cy = H / 2;
       const rx = loopRX(), ry = loopRY();
       const half = track.width / 2;
@@ -357,11 +368,9 @@
         c2d.lineTo(x, y);
       }
       c2d.closePath();
-      c2d.fillStyle = '#2b6f5c';
+      c2d.fillStyle = '#54585e';
       c2d.fill();
-      c2d.strokeStyle = '#ffd23f';
-      c2d.lineWidth = 2;
-      c2d.stroke();
+      strokeCurb(3);
 
       // start/finish marker at lap-progress 0
       const cl0 = centerlineX(trackIndex, 0);

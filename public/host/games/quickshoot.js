@@ -23,6 +23,8 @@
       .qs-light.red{background:var(--accent-red);box-shadow:0 0 24px 8px rgba(255,77,77,.7)}
       .qs-light.orange{background:var(--accent-orange);box-shadow:0 0 24px 8px rgba(255,159,63,.7)}
       .qs-light.green{background:var(--accent-green);box-shadow:0 0 30px 12px rgba(61,220,132,.85)}
+      .qs-countdown-num{position:absolute;top:60px;left:50%;transform:translateX(-50%);font-size:3rem;
+        font-weight:900;text-shadow:0 4px 0 rgba(0,0,0,.4);z-index:5}
       .qs-flash{position:absolute;inset:0;background:#3ddc84;opacity:0;pointer-events:none;transition:opacity .08s}
       .qs-flash.on{opacity:.35}
       .qs-char.qs-shot .qs-avatar{animation:qs-fall 0.7s forwards;filter:grayscale(.3)}
@@ -59,10 +61,11 @@
 
     root.innerHTML = `
       <div class="qs-wrap">
-        <div class="qs-caption" id="qs-caption">Back to back…</div>
+        <div class="qs-caption" id="qs-caption">Point both phones straight down</div>
         <div class="qs-arena">
           <div class="qs-flash" id="qs-flash"></div>
           <div class="qs-light" id="qs-light"></div>
+          <div class="qs-countdown-num" id="qs-countdown-num"></div>
           <div class="qs-char" id="qs-p1" style="left:50%">
             <img class="qs-avatar" src="${avatarUrl(p1.avatarId)}" />
             <div class="qs-label">${escapeHtml(p1.name)}</div>
@@ -80,8 +83,10 @@
     const caption = root.querySelector('#qs-caption');
     const light = root.querySelector('#qs-light');
     const flash = root.querySelector('#qs-flash');
+    const countdownNum = root.querySelector('#qs-countdown-num');
     const c1 = root.querySelector('#qs-p1');
     const c2 = root.querySelector('#qs-p2');
+    let countdownInterval = null;
 
     // Walk-apart choreography (purely visual; timing mirrors the server's QS_WALK_DURATION)
     setT(() => { caption.textContent = 'Pace 1…'; }, 250);
@@ -104,10 +109,21 @@
       caption.textContent = text || '';
     }
 
-    function onState({ phase }) {
-      if (phase === 'ready') setLight('red', 'READY…');
-      else if (phase === 'set') setLight('orange', 'SET…');
-      else if (phase === 'fire') {
+    function onState({ phase, ts, durationMs }) {
+      if (phase === 'groundcheck') setLight('red', 'Point both phones straight down');
+      else if (phase === 'walk') setLight('red', 'Back to back…');
+      else if (phase === 'countdown') {
+        clearInterval(countdownInterval);
+        setLight('red', 'Get ready…');
+        const endsAt = ts + durationMs;
+        const tick = () => {
+          countdownNum.textContent = Math.max(1, Math.ceil((endsAt - Date.now()) / 1000));
+        };
+        tick();
+        countdownInterval = setInterval(tick, 200);
+      } else if (phase === 'fire') {
+        clearInterval(countdownInterval);
+        countdownNum.textContent = '';
         setLight('green', 'FIRE!! 🔫');
         flash.classList.add('on');
         setT(() => flash.classList.remove('on'), 150);
@@ -115,6 +131,7 @@
     }
 
     function onResult(result) {
+      clearInterval(countdownInterval);
       clearTimers();
       showResult(root, result, { p1, p2, socket, roomCode, onExit, c1, c2, bracketMode, onMatchResult });
     }
@@ -124,6 +141,7 @@
 
     return {
       stop() {
+        clearInterval(countdownInterval);
         clearTimers();
         socket.off('quickshoot:state', onState);
         socket.off('quickshoot:result', onResult);

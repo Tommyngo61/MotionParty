@@ -12,6 +12,7 @@
 
     <section id="screen-join" class="screen active">
       <h1>🎮 Motion Party</h1>
+      <div class="rotation-hint">🔒📱 Lock your screen rotation to Portrait for the best experience</div>
       <label class="field-label" for="input-code">Room Code</label>
       <input id="input-code" class="code-input" maxlength="4" autocapitalize="characters" placeholder="ABCD" />
 
@@ -32,6 +33,7 @@
       </div>
       <div class="spinner"></div>
       <p class="dim">Waiting for the host to start a game…</p>
+      <div class="rotation-hint">🔒📱 Lock your screen rotation to Portrait for the best experience</div>
     </section>
 
     <section id="screen-spectate" class="screen">
@@ -55,10 +57,12 @@
   <script src="/shared/avatars.js"></script>
   <script src="/shared/tracks.js"></script>
   <script src="/shared/mazes.js"></script>
+  <script src="/shared/colors.js"></script>
   <script src="controllers/tennis.js"></script>
   <script src="controllers/quickshoot.js"></script>
   <script src="controllers/stayontrack.js"></script>
   <script src="controllers/tiltmaze.js"></script>
+  <script src="controllers/colormatch.js"></script>
   <script src="player.js"></script>
 </body>
 </html>

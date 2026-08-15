@@ -60,7 +60,7 @@
         <div class="sot-lanes">${players.map(laneHtml).join('')}</div>
         <div class="sot-msg" id="sot-msg">
           <div class="big" id="sot-msg-big">Get Ready…</div>
-          <div class="sub">Hold your phone flat to start! Then tilt forward/back to speed up or reverse, and left/right to steer. Fall off and you restart that track — Track 4 loops!</div>
+          <div class="sub">Hold your phone flat to start! You'll move forward on your own — tilt left/right to steer. Fall off and you restart that track — Track 4 loops!</div>
         </div>
       </div>
     `;
