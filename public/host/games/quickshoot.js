@@ -247,27 +247,10 @@
   }
 
   // ---------- How to Play tutorial ----------
-  const TUT_STYLE_ID = 'qs-tut-style';
-  function ensureTutStyle() {
-    if (document.getElementById(TUT_STYLE_ID)) return;
-    const style = document.createElement('style');
-    style.id = TUT_STYLE_ID;
-    style.textContent = `
-      .qs-tut-phone{animation:qs-tut-flick 3.2s ease-in-out infinite}
-      @keyframes qs-tut-flick{0%,55%{transform:rotate(180deg)}62%,85%{transform:rotate(0deg)}100%{transform:rotate(180deg)}}
-      .qs-tut-light{position:absolute;top:14%;left:50%;transform:translateX(-50%);width:16px;height:16px;
-        border-radius:50%;background:#ff4d4d;box-shadow:0 0 10px 3px rgba(255,77,77,.6);
-        animation:qs-tut-light 3.2s ease-in-out infinite}
-      @keyframes qs-tut-light{0%,50%{background:#ff4d4d;box-shadow:0 0 10px 3px rgba(255,77,77,.6)}
-        62%,85%{background:#3ddc84;box-shadow:0 0 10px 3px rgba(61,220,132,.7)}
-        90%,100%{background:#ff4d4d;box-shadow:0 0 10px 3px rgba(255,77,77,.6)}}
-    `;
-    document.head.appendChild(style);
-  }
-
+  // Real captured gameplay footage (host-screen view of an actual round) - see
+  // "Tutorial footage" in the README for how this was recorded.
   function animateTutorial(stage) {
-    ensureTutStyle();
-    stage.innerHTML = '<div class="qs-tut-light"></div><div class="mpt-phone qs-tut-phone"></div>';
+    stage.innerHTML = '<img src="tutorials/quickshoot.gif" alt="1-2-3 Shoot! gameplay demo" style="width:100%;height:100%;object-fit:contain;background:#000">';
     return () => {};
   }
 

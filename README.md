@@ -163,8 +163,8 @@ public/
   shared/colors.js   Color-distance math for Color Match Relay, shared by both apps.
   shared/feedback.js Synthesized (Web Audio) sound effects + a vibrate() wrapper,
                      shared by both apps - see Sound, vibration & tutorials below.
-  shared/tutorial.js The "How to Play" modal + window.MP_TUTORIALS registry, shown
-                     on the host only.
+  shared/tutorial.js The inline autoplaying select-screen demo + window.MP_TUTORIALS
+                     registry, shown on the host only.
 
   host/              The big-screen app: lobby, QR code, game menu, player-select,
     host.js          bracket orchestration, and game rendering (Canvas 2D for
@@ -174,6 +174,8 @@ public/
     games/stayontrack.js
     games/tiltmaze.js
     games/colormatch.js
+    tutorials/       Captured gameplay GIFs used by MP_TUTORIALS entries that have
+                     real footage (see Sound, vibration & tutorials below).
 
   player/            The phone app: join flow, avatar picker, and per-game
     player.js        controllers that read devicemotion/deviceorientation/camera
@@ -264,14 +266,31 @@ Every game gets three layers of feedback beyond its visuals:
   are unchanged; sound was layered in alongside them at the same moments rather
   than routed through a shared helper, so each game's vibration patterns stay
   easy to find next to the gameplay code that triggers them.
-- **Tutorials** — `public/shared/tutorial.js` exposes `window.MP_showTutorial`
+- **Tutorials** — `public/shared/tutorial.js` exposes `window.MP_renderTutorial`
   and a `window.MP_TUTORIALS` registry (same shape as `MP_GAMES`/`MP_CONTROLLERS`).
-  There's no real video - screen-recording gameplay and shipping the files isn't
-  practical here - so each game instead registers a small looping CSS animation
-  (a `.mpt-phone` glyph other games reuse, rotated/translated to mime the actual
-  motion) paired with a numbered step list. The host's player-select screen shows
-  a **▶ How to Play** button (wired in `host.js`'s `renderHowTo`) that opens it for
-  whichever game is currently selected.
+  The host's player-select screen renders whichever game is selected into
+  `#select-stage` immediately and autoplays it - no button, no modal - via
+  `openSelectScreen` in `host.js`, which also stops the previous one whenever
+  navigation leaves that screen.
+  - **Preferred: real captured footage.** `public/host/tutorials/<name>.gif` is an
+    actual screen-recording of a real round (host-screen view) played back with a
+    plain `<img>` - GIFs autoplay/loop with no JS. `quickshoot.js`'s `render()` is
+    the reference example. These were captured by scripting an actual match end to
+    end (two simulated "phones" via synthetic `devicemotion`/`deviceorientation`
+    events) and recording the host tab. The one real trap: the recorder only
+    captures a frame on an actual `computer` click/type/key/drag action, *not* on
+    screenshots or JS execution, and the game's own timers keep running in real
+    time regardless of how long each recording step takes - so a slow step can let
+    the round finish before the next scripted action lands. Polling actual page
+    state (e.g. the caption text) before each action, instead of guessing fixed
+    delays, is what makes this reliable; widening a game's result-grace timing
+    constant temporarily (revert it before committing!) buys extra margin on
+    tightly-timed games like Quick Shoot's post-FIRE window.
+  - **Fallback: a small looping CSS animation** for any game without captured
+    footage yet - a `.mpt-phone` glyph other games reuse, rotated/translated to
+    mime the actual motion. `tennis.js`/`stayontrack.js`/`tiltmaze.js`/
+    `colormatch.js`'s `render()` functions are the reference examples for this
+    style.
 
 ## Tuning
 
@@ -375,9 +394,11 @@ match-result event, since brackets are host-side only, as above).
   player would expect a cue - start/go, success, failure, and match end at minimum.
   Add `navigator.vibrate(...)` alongside it on the player side wherever a phone
   should buzz; the host never vibrates.
-- Register `window.MP_TUTORIALS.<name> = { emoji, title, steps, animate(stageEl) }`
-  in the game's own `public/host/games/<name>.js` (next to its `MP_GAMES.<name>`
-  registration) - `steps` is an array of plain strings (`**bold**` for emphasis),
-  and `animate` renders a short looping CSS demo into `stageEl` and returns a
-  cleanup function. The select screen's **▶ How to Play** button only appears once
-  a game has a `MP_TUTORIALS` entry, so it's easy to tell if one's missing.
+- Register `window.MP_TUTORIALS.<name> = { emoji, title, render(stageEl) }` in the
+  game's own `public/host/games/<name>.js` (next to its `MP_GAMES.<name>`
+  registration) - `render` fills `stageEl` and returns a cleanup function, called
+  automatically the moment the select screen opens for that game. Start with the
+  CSS-demo style (see the existing games without footage) since it needs no
+  assets; swap in real captured footage later the same way `quickshoot.js` does,
+  following the capture process described above. A game with no `MP_TUTORIALS`
+  entry just shows nothing in that spot, so it's easy to tell if one's missing.
