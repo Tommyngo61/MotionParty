@@ -140,14 +140,21 @@
         clearInterval(countdownInterval);
         setLight('red', 'Get ready…');
         const endsAt = ts + durationMs;
+        let lastNum = null;
         const tick = () => {
-          countdownNum.textContent = Math.max(1, Math.ceil((endsAt - Date.now()) / 1000));
+          const n = Math.max(1, Math.ceil((endsAt - Date.now()) / 1000));
+          if (n !== lastNum) {
+            lastNum = n;
+            if (window.MP_Feedback) window.MP_Feedback.play('tick');
+          }
+          countdownNum.textContent = n;
         };
         tick();
         countdownInterval = setInterval(tick, 200);
       } else if (phase === 'fire') {
         clearInterval(countdownInterval);
         countdownNum.textContent = '';
+        if (window.MP_Feedback) window.MP_Feedback.play('fire');
         setLight('green', 'FIRE!! 🔫');
         flash.classList.add('on');
         setT(() => flash.classList.remove('on'), 150);
@@ -196,6 +203,8 @@
       if (times[p2.id] != null) root.querySelector('#qs-time-2').textContent = times[p2.id] + ' ms';
     }
 
+    if (window.MP_Feedback) window.MP_Feedback.play(reason === 'noShow' ? 'error' : 'win');
+
     let headline;
     if (reason === 'falseStart') {
       headline = `${byId[winnerId] ? byId[winnerId].name : 'Opponent'} won — ${byId[loserId] ? byId[loserId].name : 'someone'} drew too early!`;
@@ -236,6 +245,44 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
   }
+
+  // ---------- How to Play tutorial ----------
+  const TUT_STYLE_ID = 'qs-tut-style';
+  function ensureTutStyle() {
+    if (document.getElementById(TUT_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = TUT_STYLE_ID;
+    style.textContent = `
+      .qs-tut-phone{animation:qs-tut-flick 3.2s ease-in-out infinite}
+      @keyframes qs-tut-flick{0%,55%{transform:rotate(180deg)}62%,85%{transform:rotate(0deg)}100%{transform:rotate(180deg)}}
+      .qs-tut-light{position:absolute;top:14%;left:50%;transform:translateX(-50%);width:16px;height:16px;
+        border-radius:50%;background:#ff4d4d;box-shadow:0 0 10px 3px rgba(255,77,77,.6);
+        animation:qs-tut-light 3.2s ease-in-out infinite}
+      @keyframes qs-tut-light{0%,50%{background:#ff4d4d;box-shadow:0 0 10px 3px rgba(255,77,77,.6)}
+        62%,85%{background:#3ddc84;box-shadow:0 0 10px 3px rgba(61,220,132,.7)}
+        90%,100%{background:#ff4d4d;box-shadow:0 0 10px 3px rgba(255,77,77,.6)}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function animateTutorial(stage) {
+    ensureTutStyle();
+    stage.innerHTML = '<div class="qs-tut-light"></div><div class="mpt-phone qs-tut-phone"></div>';
+    return () => {};
+  }
+
+  window.MP_TUTORIALS = window.MP_TUTORIALS || {};
+  window.MP_TUTORIALS.quickshoot = {
+    emoji: '🤠',
+    title: '1-2-3 Shoot!',
+    steps: [
+      'Point your phone down at your side, like a holstered gun, and hold it there — the duel won\'t start until both players are aimed down.',
+      'Watch the light and the countdown on the TV. Stay still while it counts down.',
+      'The instant it turns green and says FIRE, flick your phone up to draw.',
+      'Draw before green and you lose instantly — fastest reaction after FIRE wins the duel.',
+    ],
+    animate: animateTutorial,
+  };
 
   window.MP_GAMES = window.MP_GAMES || {};
   window.MP_GAMES.quickshoot = { start };

@@ -56,6 +56,7 @@
         countEl.textContent = 'Swings: ' + swings;
         box.classList.add('swung');
         setTimeout(() => box.classList.remove('swung'), 140);
+        if (window.MP_Feedback) window.MP_Feedback.play('swing');
         if (navigator.vibrate) navigator.vibrate(15);
         const tilt = Math.max(-1, Math.min(1, lastGamma / 45));
         socket.emit('player:input', {

@@ -123,6 +123,7 @@
     }
 
     function beginRace() {
+      if (window.MP_Feedback) window.MP_Feedback.play('go');
       raceStartTs = performance.now();
       mazeIndex = 0;
       resetBall(0);
@@ -153,11 +154,13 @@
         mazeIndex++;
         resetBall(mazeIndex);
         mazeLabel.textContent = `Maze ${mazeIndex + 1}/${MAZES.length}`;
+        if (window.MP_Feedback) window.MP_Feedback.play('success');
         flashToast(`${MAZES[mazeIndex - 1].name} solved!`);
         relayProgress(true, initialDist);
       } else {
         const totalTimeMs = performance.now() - raceStartTs;
         raceState = 'finished';
+        if (window.MP_Feedback) window.MP_Feedback.play('finish');
         setMsg('🏁 SOLVED!', `Your time: ${(totalTimeMs / 1000).toFixed(1)}s — waiting for the result…`, true);
         socket.emit('tiltmaze:finish', { totalTimeMs });
         relayProgress(true, 0);
@@ -174,6 +177,7 @@
         const winner = opponents.find((p) => p.id === result.winnerId);
         setMsg('Someone finished first', `${winner ? winner.name : 'Another racer'} solved both mazes first.`, true);
       }
+      if (window.MP_Feedback) window.MP_Feedback.play(won ? 'win' : 'lose');
       if (navigator.vibrate) navigator.vibrate(won ? [0, 60] : [0, 120, 60, 120]);
     }
     socket.on('tiltmaze:result', onResult);

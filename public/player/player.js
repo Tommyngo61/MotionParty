@@ -66,6 +66,7 @@
       return;
     }
     el('btn-join').disabled = true;
+    if (window.MP_Feedback) window.MP_Feedback.unlock(); // must happen on a tap for iOS Safari
     await window.MP_requestMotionPermission();
 
     socket.emit('player:join', { code, name, avatarId: selectedAvatar }, (res) => {

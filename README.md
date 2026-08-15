@@ -161,6 +161,10 @@ public/
   shared/tracks.js   Procedural course definitions for Stay on Track, shared by both apps.
   shared/mazes.js    Seeded procedural maze generation for Tilt Maze, shared by both apps.
   shared/colors.js   Color-distance math for Color Match Relay, shared by both apps.
+  shared/feedback.js Synthesized (Web Audio) sound effects + a vibrate() wrapper,
+                     shared by both apps - see Sound, vibration & tutorials below.
+  shared/tutorial.js The "How to Play" modal + window.MP_TUTORIALS registry, shown
+                     on the host only.
 
   host/              The big-screen app: lobby, QR code, game menu, player-select,
     host.js          bracket orchestration, and game rendering (Canvas 2D for
@@ -239,6 +243,35 @@ tab. It plays a bracket by calling the normal match-start flow once per pairing 
 listening for that specific match to end, so `tennis.js`/`quickshoot.js`'s actual
 gameplay simulation is completely unmodified for bracket play - only their
 result-screen code branches on a `bracketMode` flag (see below).
+
+## Sound, vibration & tutorials
+
+Every game gets three layers of feedback beyond its visuals:
+
+- **Sound** — `public/shared/feedback.js` exposes `window.MP_Feedback`, a small
+  Web Audio wrapper (`tone`/`noise`/`sequence`) plus a set of named presets
+  (`tick`, `go`, `ready`, `fire`, `swing`, `hit`, `point`, `success`, `fall`,
+  `finish`, `win`, `lose`, `error`) that game code calls as `MP_Feedback.play('win')`
+  at the moment something happens. Everything is synthesized in-browser -
+  there are no audio files to download, license, or ship, the same "nothing
+  pre-made" approach the project already takes with hand-drawn SVG avatars
+  instead of generated art. Because browsers block audio until a real user
+  gesture, `MP_Feedback.unlock()` is called once at the first tap on each app -
+  the player's Join button (`public/player/player.js`) and the host's first
+  game-tile click (`public/host/host.js`).
+- **Vibration** — a plain `navigator.vibrate(...)` wrapper on the *player* side
+  only (the host is a TV, it can't vibrate). Existing per-game vibration calls
+  are unchanged; sound was layered in alongside them at the same moments rather
+  than routed through a shared helper, so each game's vibration patterns stay
+  easy to find next to the gameplay code that triggers them.
+- **Tutorials** — `public/shared/tutorial.js` exposes `window.MP_showTutorial`
+  and a `window.MP_TUTORIALS` registry (same shape as `MP_GAMES`/`MP_CONTROLLERS`).
+  There's no real video - screen-recording gameplay and shipping the files isn't
+  practical here - so each game instead registers a small looping CSS animation
+  (a `.mpt-phone` glyph other games reuse, rotated/translated to mime the actual
+  motion) paired with a numbered step list. The host's player-select screen shows
+  a **▶ How to Play** button (wired in `host.js`'s `renderHowTo`) that opens it for
+  whichever game is currently selected.
 
 ## Tuning
 
@@ -333,3 +366,18 @@ server-side relay/timing it needs in `server/index.js` (most games can just use 
 existing generic `player:input` → `input:relay` relay and won't need server changes
 at all - and free-for-all/bracket games need *no* server changes beyond the normal
 match-result event, since brackets are host-side only, as above).
+
+**Every new game is expected to also ship sound, vibration, and a tutorial** - see
+[Sound, vibration & tutorials](#sound-vibration--tutorials) above:
+
+- Call `window.MP_Feedback.play('<preset>')` (adding a new preset in
+  `public/shared/feedback.js` if none of the existing ones fit) at the moments a
+  player would expect a cue - start/go, success, failure, and match end at minimum.
+  Add `navigator.vibrate(...)` alongside it on the player side wherever a phone
+  should buzz; the host never vibrates.
+- Register `window.MP_TUTORIALS.<name> = { emoji, title, steps, animate(stageEl) }`
+  in the game's own `public/host/games/<name>.js` (next to its `MP_GAMES.<name>`
+  registration) - `steps` is an array of plain strings (`**bold**` for emphasis),
+  and `animate` renders a short looping CSS demo into `stageEl` and returns a
+  cleanup function. The select screen's **▶ How to Play** button only appears once
+  a game has a `MP_TUTORIALS` entry, so it's easy to tell if one's missing.

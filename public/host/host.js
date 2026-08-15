@@ -134,7 +134,13 @@
   function renderHowTo() {
     const info = GAME_INFO[pendingGame];
     el('select-howto').textContent = info ? info.howTo : '';
+    el('select-tutorial').style.display = window.MP_TUTORIALS && window.MP_TUTORIALS[pendingGame] ? 'inline-block' : 'none';
   }
+
+  el('select-tutorial').addEventListener('click', () => {
+    if (window.MP_Feedback) window.MP_Feedback.unlock();
+    window.MP_showTutorial(pendingGame);
+  });
 
   function renderSelectTitle() {
     const info = GAME_INFO[pendingGame];
@@ -215,7 +221,10 @@
 
   // ---------- Game tiles ----------
   document.querySelectorAll('.game-tile[data-game]').forEach((tile) => {
-    tile.addEventListener('click', () => openSelectScreen(tile.dataset.game));
+    tile.addEventListener('click', () => {
+      if (window.MP_Feedback) window.MP_Feedback.unlock(); // first tap on the TV - safe point to unlock audio
+      openSelectScreen(tile.dataset.game);
+    });
   });
 
   // ---------- Tournament bracket ----------

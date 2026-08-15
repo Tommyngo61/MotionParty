@@ -136,12 +136,14 @@
         endMatch(winnerIdx);
         return;
       }
+      if (window.MP_Feedback) window.MP_Feedback.play('point');
       showMsg(winnerIdx === hitterIndex ? 'OUT!' : 'POINT!', 900);
       serverIndex = 1 - serverIndex;
       setTimeout(() => { if (running) queueServe(); }, 1000);
     }
 
     function registerHit(byIndex, tilt) {
+      if (window.MP_Feedback) window.MP_Feedback.play('hit');
       hitterIndex = byIndex;
       receiverIndex = 1 - byIndex;
       x0 = clamp(currentBallX(), -1, 1);
@@ -316,6 +318,7 @@
       running = false;
       cancelAnimationFrame(rafId);
       clearTimeout(serveTimer);
+      if (window.MP_Feedback) window.MP_Feedback.play('win');
       const overlay = document.createElement('div');
       overlay.className = 'tn-result';
       if (bracketMode) {
@@ -364,6 +367,41 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
   }
+
+  // ---------- How to Play tutorial ----------
+  const TUT_STYLE_ID = 'tn-tut-style';
+  function ensureTutStyle() {
+    if (document.getElementById(TUT_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = TUT_STYLE_ID;
+    style.textContent = `
+      .tn-tut-phone{left:32%;transform-origin:50% 85%;animation:tn-tut-swing 1.3s ease-in-out infinite}
+      @keyframes tn-tut-swing{0%,55%{transform:rotate(-22deg)}68%{transform:rotate(30deg)}100%{transform:rotate(-22deg)}}
+      .tn-tut-ball{position:absolute;top:38%;width:14px;height:14px;border-radius:50%;background:#e8ff3f;
+        border:1px solid #b8cc20;animation:tn-tut-ball 1.3s ease-in-out infinite}
+      @keyframes tn-tut-ball{0%,55%{left:30%;opacity:0}56%{opacity:1}75%{left:78%}100%{left:30%;opacity:0}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function animateTutorial(stage) {
+    ensureTutStyle();
+    stage.innerHTML = '<div class="mpt-phone tn-tut-phone"></div><div class="tn-tut-ball"></div>';
+    return () => {};
+  }
+
+  window.MP_TUTORIALS = window.MP_TUTORIALS || {};
+  window.MP_TUTORIALS.tennis = {
+    emoji: '🎾',
+    title: 'Motion Tennis',
+    steps: [
+      'Your character auto-moves into position on the court — you never need to walk it yourself.',
+      'When the ball is in range, swing your phone like a racket to hit it back.',
+      'Tilt left or right at the moment of the swing to steer where your return goes.',
+      'First to 5 points wins the match.',
+    ],
+    animate: animateTutorial,
+  };
 
   window.MP_GAMES = window.MP_GAMES || {};
   window.MP_GAMES.tennis = { start };

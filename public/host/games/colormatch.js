@@ -85,9 +85,10 @@
     const msgBox = root.querySelector('#cm-msg');
     const msgBig = root.querySelector('#cm-msg-big');
 
-    setT(() => (msgBig.textContent = '3…'), CM_COUNTDOWN_MS - 2400);
-    setT(() => (msgBig.textContent = '2…'), CM_COUNTDOWN_MS - 1600);
-    setT(() => (msgBig.textContent = '1…'), CM_COUNTDOWN_MS - 800);
+    const tickCue = () => { if (window.MP_Feedback) window.MP_Feedback.play('tick'); };
+    setT(() => { msgBig.textContent = '3…'; tickCue(); }, CM_COUNTDOWN_MS - 2400);
+    setT(() => { msgBig.textContent = '2…'; tickCue(); }, CM_COUNTDOWN_MS - 1600);
+    setT(() => { msgBig.textContent = '1…'; tickCue(); }, CM_COUNTDOWN_MS - 800);
 
     function laneEl(playerId) {
       return wrap.querySelector(`.cm-lane[data-player="${playerId}"]`);
@@ -102,6 +103,7 @@
     }
 
     function onGo({ target, roundMs }) {
+      if (window.MP_Feedback) window.MP_Feedback.play('go');
       targetSwatch.style.background = target.hex;
       targetName.textContent = target.name;
       targetBox.style.visibility = 'visible';
@@ -130,6 +132,7 @@
       socket.off('input:relay', onInputRelay);
       const byId = Object.fromEntries(players.map((p) => [p.id, p]));
       const winner = result.winnerId ? byId[result.winnerId] : null;
+      if (window.MP_Feedback) window.MP_Feedback.play(winner ? 'win' : 'error');
 
       msgBox.style.display = 'flex';
       msgBig.textContent = winner ? `🏆 ${winner.name} matches best!` : 'Nobody found a close enough match!';
@@ -184,6 +187,46 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
   }
+
+  // ---------- How to Play tutorial ----------
+  const TUT_STYLE_ID = 'cm-tut-style';
+  function ensureTutStyle() {
+    if (document.getElementById(TUT_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = TUT_STYLE_ID;
+    style.textContent = `
+      .cm-tut-swatch{position:absolute;top:16%;left:50%;transform:translateX(-50%);width:34px;height:34px;
+        border-radius:50%;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.25);
+        animation:cm-tut-swatch 3s steps(1) infinite}
+      @keyframes cm-tut-swatch{0%,32%{background:#e53935}33%,65%{background:#1e88e5}66%,100%{background:#43a047}}
+      .cm-tut-phone{left:38%;animation:cm-tut-snap 3s ease-in-out infinite}
+      @keyframes cm-tut-snap{0%,28%{transform:scale(1)}30%{transform:scale(.92)}32%{transform:scale(1)}100%{transform:scale(1)}}
+      .cm-tut-check{position:absolute;top:36%;left:64%;font-size:1.4rem;opacity:0;
+        animation:cm-tut-check 3s ease-in-out infinite}
+      @keyframes cm-tut-check{0%,30%{opacity:0;transform:scale(.6)}34%{opacity:1;transform:scale(1.1)}
+        60%{opacity:1;transform:scale(1)}66%{opacity:0}100%{opacity:0}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function animateTutorial(stage) {
+    ensureTutStyle();
+    stage.innerHTML = '<div class="cm-tut-swatch"></div><div class="mpt-phone cm-tut-phone"></div><div class="cm-tut-check">✅</div>';
+    return () => {};
+  }
+
+  window.MP_TUTORIALS = window.MP_TUTORIALS || {};
+  window.MP_TUTORIALS.colormatch = {
+    emoji: '🎨',
+    title: 'Color Match Relay',
+    steps: [
+      'A color flashes on the TV — that\'s your target.',
+      'Run and find something in the room that\'s close to that color.',
+      'Point your phone\'s camera at it and tap Capture to photograph it.',
+      'You have a few seconds; everyone competes at once — the closest match wins the round.',
+    ],
+    animate: animateTutorial,
+  };
 
   window.MP_GAMES = window.MP_GAMES || {};
   window.MP_GAMES.colormatch = { start };

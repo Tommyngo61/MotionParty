@@ -135,6 +135,7 @@
       attempts[trackIndex]++;
       flash.classList.add('on');
       setTimeout(() => flash.classList.remove('on'), 180);
+      if (window.MP_Feedback) window.MP_Feedback.play('fall');
       if (navigator.vibrate) navigator.vibrate([0, 90, 60, 90]);
       relayProgress(true);
     }
@@ -154,11 +155,13 @@
         ballVelX = 0;
         ballX = centerlineX(trackIndex, 0);
         trackLabel.textContent = `Track ${trackIndex + 1}/${TRACKS.length}`;
+        if (window.MP_Feedback) window.MP_Feedback.play('success');
         flashToast(`${TRACKS[trackIndex - 1].name} complete!`);
         relayProgress(true);
       } else {
         const totalTimeMs = performance.now() - raceStartTs;
         raceState = 'finished';
+        if (window.MP_Feedback) window.MP_Feedback.play('finish');
         setMsg('🏁 FINISHED!', `Your time: ${(totalTimeMs / 1000).toFixed(1)}s — waiting for the result…`, true);
         socket.emit('stayontrack:finish', { totalTimeMs });
         relayProgress(true);
@@ -173,6 +176,7 @@
     }
 
     function beginRace() {
+      if (window.MP_Feedback) window.MP_Feedback.play('go');
       raceStartTs = performance.now();
       trackIndex = 0;
       progress = 0;
@@ -203,6 +207,7 @@
         const winner = opponents.find((p) => p.id === result.winnerId);
         setMsg('Someone finished first', `${winner ? winner.name : 'Another racer'} won this race.`, true);
       }
+      if (window.MP_Feedback) window.MP_Feedback.play(won ? 'win' : 'lose');
       if (navigator.vibrate) navigator.vibrate(won ? [0, 60] : [0, 120, 60, 120]);
     }
     socket.on('stayontrack:result', onResult);

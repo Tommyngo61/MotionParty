@@ -186,6 +186,7 @@
       feedback.classList.add('show');
       clearTimeout(feedbackTimer);
       feedbackTimer = setTimeout(() => feedback.classList.remove('show'), 1400);
+      if (window.MP_Feedback) window.MP_Feedback.play(matched ? 'success' : 'tick');
       if (navigator.vibrate) navigator.vibrate(matched ? [0, 60] : [0, 25]);
 
       socket.emit('player:input', { gameEvent: 'colormatch:attempt', payload: { hex: capturedHex, distance: Math.round(distance) } });
@@ -210,6 +211,7 @@
       } else {
         setMsg('Nobody found a match!', "Time ran out before anyone got close enough.", true, false);
       }
+      if (window.MP_Feedback) window.MP_Feedback.play(won ? 'win' : 'lose');
       if (navigator.vibrate) navigator.vibrate(won ? [0, 60] : [0, 120, 60, 120]);
     }
     socket.on('colormatch:result', onResult);

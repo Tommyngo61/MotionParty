@@ -67,9 +67,10 @@
     const msgBox = root.querySelector('#tm-msg');
     const msgBig = root.querySelector('#tm-msg-big');
 
-    setT(() => (msgBig.textContent = '3…'), TM_COUNTDOWN_MS - 2400);
-    setT(() => (msgBig.textContent = '2…'), TM_COUNTDOWN_MS - 1600);
-    setT(() => (msgBig.textContent = '1…'), TM_COUNTDOWN_MS - 800);
+    const tickCue = () => { if (window.MP_Feedback) window.MP_Feedback.play('tick'); };
+    setT(() => { msgBig.textContent = '3…'; tickCue(); }, TM_COUNTDOWN_MS - 2400);
+    setT(() => { msgBig.textContent = '2…'; tickCue(); }, TM_COUNTDOWN_MS - 1600);
+    setT(() => { msgBig.textContent = '1…'; tickCue(); }, TM_COUNTDOWN_MS - 800);
 
     function laneEl(playerId) {
       return wrap.querySelector(`.tm-lane[data-player="${playerId}"]`);
@@ -101,6 +102,7 @@
     socket.on('input:relay', onInputRelay);
 
     function onGo() {
+      if (window.MP_Feedback) window.MP_Feedback.play('go');
       msgBig.textContent = 'GO!';
       msgBox.style.transition = 'opacity .3s';
       setT(() => (msgBox.style.opacity = '0'), 500);
@@ -112,6 +114,7 @@
       socket.off('input:relay', onInputRelay);
       const byId = Object.fromEntries(players.map((p) => [p.id, p]));
       const winner = byId[result.winnerId];
+      if (window.MP_Feedback) window.MP_Feedback.play(winner ? 'win' : 'error');
       msgBox.style.display = 'flex';
       msgBox.style.opacity = '1';
       msgBig.textContent = winner ? `🏆 ${winner.name} wins!` : 'Race over!';
@@ -145,6 +148,46 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
   }
+
+  // ---------- How to Play tutorial ----------
+  const TUT_STYLE_ID = 'tm-tut-style';
+  function ensureTutStyle() {
+    if (document.getElementById(TUT_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = TUT_STYLE_ID;
+    style.textContent = `
+      .tm-tut-phone{animation:tm-tut-tilt 1.8s ease-in-out infinite}
+      @keyframes tm-tut-tilt{0%,100%{transform:rotate(-14deg)}25%{transform:rotate(14deg)}
+        50%{transform:rotate(10deg) scale(1.02)}75%{transform:rotate(-10deg)}}
+      .tm-tut-box{position:absolute;left:14%;right:14%;top:14%;bottom:14%;border:3px solid rgba(22,35,61,.35);
+        border-radius:8px}
+      .tm-tut-hole{position:absolute;right:18%;bottom:18%;width:14px;height:14px;border-radius:50%;
+        background:#16233d}
+      .tm-tut-ball{position:absolute;left:18%;top:18%;width:13px;height:13px;border-radius:50%;
+        background:radial-gradient(circle at 35% 35%,#eef0f2,#7c8288);animation:tm-tut-ball 1.8s ease-in-out infinite}
+      @keyframes tm-tut-ball{0%{left:18%;top:18%}50%{left:62%;top:55%}100%{left:18%;top:18%}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function animateTutorial(stage) {
+    ensureTutStyle();
+    stage.innerHTML = '<div class="mpt-phone tm-tut-phone"></div><div class="tm-tut-box"><div class="tm-tut-hole"></div><div class="tm-tut-ball"></div></div>';
+    return () => {};
+  }
+
+  window.MP_TUTORIALS = window.MP_TUTORIALS || {};
+  window.MP_TUTORIALS.tiltmaze = {
+    emoji: '🧭',
+    title: 'Tilt Maze',
+    steps: [
+      'Hold your phone flat — the race won\'t start until it\'s level, so nobody gets a head start.',
+      'Tilt your phone like a tray to roll the iron ball through the maze toward the hole.',
+      'The maze walls contain the ball — it can\'t fall off, but it does slide along walls with real momentum.',
+      'Everyone races at once; first to solve the Easy maze then the Hard maze wins.',
+    ],
+    animate: animateTutorial,
+  };
 
   window.MP_GAMES = window.MP_GAMES || {};
   window.MP_GAMES.tiltmaze = { start };

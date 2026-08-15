@@ -68,9 +68,10 @@
     const msgBox = root.querySelector('#sot-msg');
     const msgBig = root.querySelector('#sot-msg-big');
 
-    setT(() => (msgBig.textContent = '3…'), SOT_COUNTDOWN_MS - 2400);
-    setT(() => (msgBig.textContent = '2…'), SOT_COUNTDOWN_MS - 1600);
-    setT(() => (msgBig.textContent = '1…'), SOT_COUNTDOWN_MS - 800);
+    const tickCue = () => { if (window.MP_Feedback) window.MP_Feedback.play('tick'); };
+    setT(() => { msgBig.textContent = '3…'; tickCue(); }, SOT_COUNTDOWN_MS - 2400);
+    setT(() => { msgBig.textContent = '2…'; tickCue(); }, SOT_COUNTDOWN_MS - 1600);
+    setT(() => { msgBig.textContent = '1…'; tickCue(); }, SOT_COUNTDOWN_MS - 800);
 
     function laneEl(playerId) {
       return wrap.querySelector(`.sot-lane[data-player="${playerId}"]`);
@@ -104,6 +105,7 @@
     socket.on('input:relay', onInputRelay);
 
     function onGo() {
+      if (window.MP_Feedback) window.MP_Feedback.play('go');
       msgBig.textContent = 'GO!';
       setT(() => msgBox.classList.add('hide-msg'), 500);
       msgBox.style.transition = 'opacity .3s';
@@ -116,6 +118,7 @@
       socket.off('input:relay', onInputRelay);
       const byId = Object.fromEntries(players.map((p) => [p.id, p]));
       const winner = byId[result.winnerId];
+      if (window.MP_Feedback) window.MP_Feedback.play(winner ? 'win' : 'error');
       msgBox.style.display = 'flex';
       msgBox.style.opacity = '1';
       msgBig.textContent = winner ? `🏆 ${winner.name} wins!` : 'Race over!';
@@ -149,6 +152,44 @@
       '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
     }[c]));
   }
+
+  // ---------- How to Play tutorial ----------
+  const TUT_STYLE_ID = 'sot-tut-style';
+  function ensureTutStyle() {
+    if (document.getElementById(TUT_STYLE_ID)) return;
+    const style = document.createElement('style');
+    style.id = TUT_STYLE_ID;
+    style.textContent = `
+      .sot-tut-phone{animation:sot-tut-tilt 1.6s ease-in-out infinite}
+      @keyframes sot-tut-tilt{0%,100%{transform:rotate(-16deg)}50%{transform:rotate(16deg)}}
+      .sot-tut-path{position:absolute;left:10%;right:10%;bottom:18%;height:3px;background:rgba(22,35,61,.25);
+        border-radius:2px}
+      .sot-tut-ball{position:absolute;bottom:calc(18% - 7px);width:14px;height:14px;border-radius:50%;
+        background:#ffe15e;border:1px solid #8a6a00;animation:sot-tut-ball 1.6s ease-in-out infinite}
+      @keyframes sot-tut-ball{0%,100%{left:16%}50%{left:76%}}
+    `;
+    document.head.appendChild(style);
+  }
+
+  function animateTutorial(stage) {
+    ensureTutStyle();
+    stage.innerHTML = '<div class="mpt-phone sot-tut-phone"></div><div class="sot-tut-path"></div><div class="sot-tut-ball"></div>';
+    return () => {};
+  }
+
+  window.MP_TUTORIALS = window.MP_TUTORIALS || {};
+  window.MP_TUTORIALS.stayontrack = {
+    emoji: '🛤️',
+    title: 'Stay on Track',
+    steps: [
+      'Hold your phone flat, face up — the race won\'t start until it\'s level, so nobody gets a head start.',
+      'You move forward automatically. Tilt left or right to steer the ball along the path.',
+      'The ball has real momentum — tilt the other way to slow or reverse it, not just to stop.',
+      'Drift off the edge and you restart that track — Track 4 is a loop, so go around it twice.',
+      'Everyone races at once; first to clear all 4 tracks wins.',
+    ],
+    animate: animateTutorial,
+  };
 
   window.MP_GAMES = window.MP_GAMES || {};
   window.MP_GAMES.stayontrack = { start };

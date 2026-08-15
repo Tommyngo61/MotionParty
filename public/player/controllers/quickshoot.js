@@ -89,6 +89,7 @@
           else if (performance.now() - pointDownSince >= POINT_DOWN_HOLD_MS) {
             aimSignaled = true;
             socket.emit('quickshoot:aimReady');
+            if (window.MP_Feedback) window.MP_Feedback.play('success');
             title.textContent = 'Aimed!';
             sub.textContent = 'Hold still — waiting for opponent…';
           }
@@ -108,6 +109,7 @@
       } else if (armed && energy > READY_THRESHOLD) {
         resolved = true;
         socket.emit('quickshoot:falseStart');
+        if (window.MP_Feedback) window.MP_Feedback.play('error');
         box.className = 'qsc red';
         title.textContent = 'TOO EARLY!';
         sub.textContent = "You moved before FIRE.";
@@ -124,8 +126,13 @@
         title.textContent = 'Get ready…';
         sub.textContent = 'Hold still until FIRE!';
         const endsAt = ts + durationMs;
+        let lastSecond = null;
         const tick = () => {
           const secondsLeft = Math.max(1, Math.ceil((endsAt - Date.now()) / 1000));
+          if (secondsLeft !== lastSecond) {
+            lastSecond = secondsLeft;
+            if (window.MP_Feedback) window.MP_Feedback.play('tick');
+          }
           countdownNum.textContent = secondsLeft;
         };
         tick();
@@ -136,6 +143,7 @@
         title.textContent = 'FIRE!! 🔫';
         sub.textContent = 'Flick your phone up now!';
         countdownNum.textContent = '';
+        if (window.MP_Feedback) window.MP_Feedback.play('fire');
         if (navigator.vibrate) navigator.vibrate(40);
       }
     }
@@ -156,6 +164,7 @@
         title.textContent = won ? '🏆 YOU WIN!' : lost ? '💥 YOU LOSE' : 'Duel over';
       }
       sub.textContent = 'Look at the TV for the replay.';
+      if (window.MP_Feedback) window.MP_Feedback.play(won ? 'win' : lost ? 'lose' : 'error');
       if (navigator.vibrate) navigator.vibrate(lost ? [0, 120, 60, 120] : won ? [0, 60] : []);
     }
 
