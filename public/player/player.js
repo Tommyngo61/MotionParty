@@ -85,7 +85,7 @@
   });
 
   // ---------- Game lifecycle ----------
-  socket.on('game:start', ({ game, players }) => {
+  socket.on('game:start', ({ game, players, seed, difficulty }) => {
     const me = players.find((p) => p.id === playerId);
     if (!me) {
       const others = players.map((p) => p.name).join(' vs ');
@@ -102,7 +102,7 @@
     // Show the screen first so game modules that measure the DOM (e.g. sizing a canvas)
     // don't read zero dimensions from a still-`display:none` container.
     showScreen('controller');
-    activeController = mod.start(root, { socket, roomCode, playerId, me, opponent, opponents });
+    activeController = mod.start(root, { socket, roomCode, playerId, me, opponent, opponents, seed, difficulty });
   });
 
   socket.on('menu:show', () => {

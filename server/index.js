@@ -45,6 +45,11 @@ const QS_AIM_FALLBACK = 5000; // force-start past QS_WALK_DURATION if a phone ne
 const QS_COUNTDOWN_MS = 5000; // fixed ready-to-fire countdown, shown on host + phones
 const QS_RESULT_TIMEOUT = 3000; // grace period after FIRE before we declare a no-show
 
+// Stay on Track / Tilt Maze both randomize their course from a per-match seed at
+// one of these difficulty tiers - see public/shared/tracks.js / mazes.js for what
+// each tier actually changes (course size, obstacle/hazard count, etc).
+const DIFFICULTIES = ['easy', 'medium', 'hard', 'impossible'];
+
 // ---- Stay on Track timing constants (ms) ----
 const SOT_COUNTDOWN_MS = 3000; // must match the 3-2-1-GO countdown shown on host + phones
 
@@ -116,7 +121,7 @@ io.on('connection', (socket) => {
     io.to(room.code).emit('match:playersSet', { players });
   });
 
-  socket.on('host:startMatch', ({ code, game }) => {
+  socket.on('host:startMatch', ({ code, game, difficulty }) => {
     const room = store.getRoom(code);
     if (!room || room.hostSocketId !== socket.id) return;
     const isFreeForAll = game === 'stayontrack' || game === 'tiltmaze' || game === 'colormatch';
@@ -126,10 +131,15 @@ io.on('connection', (socket) => {
 
     clearGameTimers(room);
     room.currentGame = game;
-    room.gameState = { phase: 'starting', timers: [], resolved: false };
+    // A fresh random seed every match is what makes Stay on Track / Tilt Maze
+    // layouts different each time instead of the same fixed course - the host
+    // and every player regenerate the identical layout from this one number.
+    const seed = Math.floor(Math.random() * 0xffffffff);
+    const safeDifficulty = DIFFICULTIES.includes(difficulty) ? difficulty : 'medium';
+    room.gameState = { phase: 'starting', timers: [], resolved: false, seed, difficulty: safeDifficulty };
 
     const players = room.matchPlayers.map((id) => publicPlayer(room, id));
-    io.to(room.code).emit('game:start', { game, players });
+    io.to(room.code).emit('game:start', { game, players, seed, difficulty: safeDifficulty });
 
     if (game === 'quickshoot') {
       startQuickshoot(room);

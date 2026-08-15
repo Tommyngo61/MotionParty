@@ -37,8 +37,8 @@
 
   function start(root, ctx) {
     ensureStyle();
-    const { socket, roomCode, players, onExit } = ctx;
-    const TRACKS = window.MP_TRACKS;
+    const { socket, roomCode, players, onExit, seed, difficulty } = ctx;
+    const TRACKS = window.MP_generateTracks(seed, difficulty);
     let timers = [];
     const setT = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
 
@@ -132,7 +132,7 @@
       msgBox.appendChild(actions);
       msgBox.querySelector('#sot-menu').addEventListener('click', onExit);
       msgBox.querySelector('#sot-again').addEventListener('click', () => {
-        socket.emit('host:startMatch', { code: roomCode, game: 'stayontrack' });
+        socket.emit('host:startMatch', { code: roomCode, game: 'stayontrack', difficulty });
       });
     }
     socket.on('stayontrack:result', onResult);

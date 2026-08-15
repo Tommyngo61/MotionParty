@@ -17,6 +17,9 @@
       .tmc-msg.show{background:rgba(10,6,26,.72)}
       .tmc-msg .big{font-size:2rem;font-weight:900;text-shadow:0 3px 0 rgba(0,0,0,.4)}
       .tmc-msg .sub{color:rgba(255,255,255,.8)}
+      .tmc-hazard-flash{position:absolute;inset:0;background:var(--accent-red);opacity:0;
+        transition:opacity .1s;pointer-events:none;z-index:3}
+      .tmc-hazard-flash.on{opacity:.3}
     `;
     document.head.appendChild(style);
   }
@@ -31,14 +34,16 @@
   const BALL_R = 0.16;  // ball radius, in maze cell-units
   const WALL_HALF = 0.06; // wall half-thickness, in maze cell-units
   const FINISH_R = 0.32; // capture radius around the finish hole, in cell-units
+  const HAZARD_R = 0.3;  // capture radius around a hazard hole, in cell-units
+  const HAZARD_PAUSE_MS = 800; // how long the ball sits "fallen" before respawning at the maze start
   const PROGRESS_RELAY_MS = 180;
 
   function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
 
   function start(root, ctx) {
     ensureStyle();
-    const { socket, opponents } = ctx;
-    const MAZES = window.MP_MAZES;
+    const { socket, opponents, seed, difficulty } = ctx;
+    const MAZES = window.MP_generateMazes(seed, difficulty);
 
     root.innerHTML = `
       <div class="tmc-wrap">
@@ -48,6 +53,7 @@
         </div>
         <div class="tmc-canvas-wrap">
           <canvas id="tmc-canvas"></canvas>
+          <div class="tmc-hazard-flash" id="tmc-flash"></div>
           <div class="tmc-msg" id="tmc-msg"><div class="big" id="tmc-msg-big"></div><div class="sub" id="tmc-msg-sub"></div></div>
         </div>
       </div>
@@ -56,6 +62,7 @@
     const c2d = canvas.getContext('2d');
     const mazeLabel = root.querySelector('#tmc-maze');
     const timerLabel = root.querySelector('#tmc-timer');
+    const flash = root.querySelector('#tmc-flash');
     const msgBox = root.querySelector('#tmc-msg');
     const msgBig = root.querySelector('#tmc-msg-big');
     const msgSub = root.querySelector('#tmc-msg-sub');
@@ -92,7 +99,7 @@
     }
 
     // ---------- race state ----------
-    let raceState = 'waiting'; // waiting | racing | finished
+    let raceState = 'waiting'; // waiting | racing | hazard | finished
     let pendingGo = false;
     let mazeIndex = 0;
     let ballX = 0, ballY = 0, velX = 0, velY = 0;
@@ -101,6 +108,8 @@
     let lastRelay = 0;
     let rafId = null;
     let lastFrameTs = 0;
+    let attempts = MAZES.map(() => 1);
+    let hazardAt = 0;
 
     function resetBall(idx) {
       const maze = MAZES[idx];
@@ -118,8 +127,24 @@
       const progress = clamp(1 - distToFinish / initialDist, 0, 1);
       socket.emit('player:input', {
         gameEvent: 'tiltmaze:progress',
-        payload: { mazeIndex, progress },
+        payload: { mazeIndex, progress, attempts: attempts[mazeIndex] },
       });
+    }
+
+    function fallInHazard(distToFinish) {
+      raceState = 'hazard';
+      hazardAt = performance.now();
+      attempts[mazeIndex]++;
+      flash.classList.add('on');
+      setTimeout(() => flash.classList.remove('on'), 180);
+      if (window.MP_Feedback) window.MP_Feedback.play('fall');
+      if (navigator.vibrate) navigator.vibrate([0, 90, 60, 90]);
+      relayProgress(true, distToFinish);
+    }
+
+    function resumeAfterHazard() {
+      resetBall(mazeIndex);
+      raceState = 'racing';
     }
 
     function beginRace() {
@@ -226,6 +251,10 @@
         if (isFlatEnough()) beginRace();
         return;
       }
+      if (raceState === 'hazard') {
+        if (now - hazardAt >= HAZARD_PAUSE_MS) resumeAfterHazard();
+        return;
+      }
       if (raceState !== 'racing') return;
 
       const maze = MAZES[mazeIndex];
@@ -258,10 +287,16 @@
         completeMaze();
         return;
       }
+      for (const hz of maze.hazards || []) {
+        if (Math.hypot(hz.x - ballX, hz.y - ballY) < HAZARD_R) {
+          fallInHazard(distToFinish);
+          return;
+        }
+      }
       timerLabel.textContent = ((now - raceStartTs) / 1000).toFixed(1) + 's';
       relayProgress(false, distToFinish);
       // Read-only snapshot for automated testing/debugging; never read by gameplay itself.
-      window.MP_TM_DEBUG = { mazeIndex, ballX, ballY, velX, velY, raceState };
+      window.MP_TM_DEBUG = { mazeIndex, ballX, ballY, velX, velY, raceState, hazards: maze.hazards, finish: maze.finish, cols: maze.cols, rows: maze.rows, attempts: attempts[mazeIndex] };
     }
 
     function draw() {
@@ -277,6 +312,19 @@
 
       c2d.fillStyle = '#fff8e1';
       c2d.fillRect(sx(0), sy(0), gridW, gridH);
+
+      // hazard holes - fall in and you respawn at the start
+      for (const hz of maze.hazards || []) {
+        c2d.beginPath();
+        c2d.arc(sx(hz.x), sy(hz.y), cellPx * HAZARD_R, 0, Math.PI * 2);
+        c2d.fillStyle = '#7a1f1f';
+        c2d.fill();
+        c2d.strokeStyle = '#ff6b6b';
+        c2d.lineWidth = 2;
+        c2d.setLineDash([cellPx * 0.06, cellPx * 0.06]);
+        c2d.stroke();
+        c2d.setLineDash([]);
+      }
 
       // finish hole
       c2d.beginPath();

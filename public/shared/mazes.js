@@ -1,23 +1,14 @@
-// Procedurally-defined "Tilt Maze" courses, shared by the host (progress overview)
-// and the player controller (the actual tilt maze). Deterministic (seeded) so both
-// players in a race see the exact same layout.
+// Procedurally-*generated* "Tilt Maze" courses, shared by the host (progress
+// overview) and the player controller (the actual tilt maze). Both the host and
+// every player's phone call window.MP_generateMazes(seed, difficulty) with the
+// same server-issued seed, so everyone ends up with an identical layout without
+// the server having to ship the whole thing (same pattern as tracks.js).
 (function (global) {
-  function mulberry32(seed) {
-    let a = seed >>> 0;
-    return function () {
-      a |= 0;
-      a = (a + 0x6d2b79f5) | 0;
-      let t = Math.imul(a ^ (a >>> 15), 1 | a);
-      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-    };
-  }
-
   // Recursive-backtracker: carves a spanning tree over the grid, so there's exactly
   // one path between any two cells - every branch that isn't on that path is a dead
   // end, and there are no loops. That's what makes it a proper "tilt maze".
   function generate(cols, rows, seed) {
-    const rand = mulberry32(seed);
+    const rand = global.MP_mulberry32(seed);
     const cells = [];
     for (let y = 0; y < rows; y++) {
       for (let x = 0; x < cols; x++) {
@@ -68,17 +59,52 @@
     return segs;
   }
 
-  const MAZES = [
-    { name: 'Easy Maze', cols: 5, rows: 5, seed: 7 },
-    { name: 'Hard Maze', cols: 8, rows: 8, seed: 13 },
-  ];
+  // Picks `count` cells to become hazard holes: falling into one restarts the
+  // current maze attempt, same as drifting off a Stay on Track course. Kept away
+  // from the start and finish cells so nobody can fall in before they've even
+  // gotten moving, or lose the race to a hazard sitting right on the goal.
+  function placeHazards(cells, count, seed, start, finish) {
+    if (count <= 0) return [];
+    const rand = global.MP_mulberry32(seed);
+    const candidates = cells.filter((c) => {
+      const dStart = Math.hypot(c.x + 0.5 - start.x, c.y + 0.5 - start.y);
+      const dFinish = Math.hypot(c.x + 0.5 - finish.x, c.y + 0.5 - finish.y);
+      return dStart > 1.5 && dFinish > 1.5;
+    });
+    for (let i = candidates.length - 1; i > 0; i--) {
+      const j = Math.floor(rand() * (i + 1));
+      [candidates[i], candidates[j]] = [candidates[j], candidates[i]];
+    }
+    return candidates.slice(0, count).map((c) => ({ x: c.x + 0.5, y: c.y + 0.5 }));
+  }
 
-  MAZES.forEach((m) => {
-    m.cells = generate(m.cols, m.rows, m.seed);
-    m.walls = wallSegments(m.cols, m.rows, m.cells);
-    m.start = { x: 0.5, y: 0.5 };
-    m.finish = { x: m.cols - 0.5, y: m.rows - 0.5 };
-  });
+  // Difficulty scales maze size (bigger grid = longer, twistier solve) and hazard
+  // count. Both mazes in a race grow together so "Hard Maze" always stays the
+  // bigger of the pair, same shape the original fixed Easy/Hard pairing had.
+  const TIERS = {
+    easy: { sizes: [4, 6], hazards: 0 },
+    medium: { sizes: [5, 8], hazards: 1 },
+    hard: { sizes: [7, 10], hazards: 2 },
+    impossible: { sizes: [9, 13], hazards: 3 },
+  };
+  const NAMES = ['Easy Maze', 'Hard Maze'];
 
-  global.MP_MAZES = MAZES;
+  function generateMazes(seed, difficulty) {
+    const tier = TIERS[difficulty] || TIERS.medium;
+    return tier.sizes.map((size, i) => {
+      // Distinct but deterministic per-maze seeds derived from the match seed,
+      // so the two mazes in a race never accidentally end up identical.
+      const mazeSeed = (seed + i * 7919) >>> 0;
+      const cols = size, rows = size;
+      const cells = generate(cols, rows, mazeSeed);
+      const walls = wallSegments(cols, rows, cells);
+      const start = { x: 0.5, y: 0.5 };
+      const finish = { x: cols - 0.5, y: rows - 0.5 };
+      const hazards = placeHazards(cells, tier.hazards, (mazeSeed + 104729) >>> 0, start, finish);
+      return { name: NAMES[i] || `Maze ${i + 1}`, cols, rows, seed: mazeSeed, cells, walls, start, finish, hazards };
+    });
+  }
+
+  global.MP_DIFFICULTIES = global.MP_DIFFICULTIES || Object.keys(TIERS);
+  global.MP_generateMazes = generateMazes;
 })(window);

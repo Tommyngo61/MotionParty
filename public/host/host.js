@@ -4,6 +4,7 @@
   let players = new Map(); // id -> {id,name,avatarId}
   let pendingGame = null;
   let pendingMode = 'single'; // 'single' | 'bracket' | 'ffa'
+  let pendingDifficulty = 'medium'; // 'easy' | 'medium' | 'hard' | 'impossible' - games with hasDifficulty only
   let selected = [];
   let activeGameHandle = null;
   let bracket = null; // { game, rounds: [[{a,b,winnerId}]], roundIndex, entrantNames } while a tournament is running
@@ -25,13 +26,15 @@
       emoji: '🛤️',
       name: 'Stay on Track',
       freeForAll: true,
-      howTo: "Hold your phone flat to start. You move forward on your own — tilt left/right to steer a ball along a winding path without falling off — Track 4 is a loop, go around it twice. Everyone races at once; first to clear all 4 tracks wins.",
+      hasDifficulty: true,
+      howTo: "Hold your phone flat to start. You move forward on your own — tilt left/right to steer a ball along a winding path, dodging obstacles, without falling off — Track 4 is a loop, go around it twice. Tracks are randomized every race. Everyone races at once; first to clear all 4 tracks wins.",
     },
     tiltmaze: {
       emoji: '🧭',
       name: 'Tilt Maze',
       freeForAll: true,
-      howTo: "Hold your phone flat to start. Tilt it like a tray to roll an iron ball through a maze to the hole — it can't fall off, the maze walls contain it. Everyone races at once; first to solve the Easy maze then the Hard maze wins.",
+      hasDifficulty: true,
+      howTo: "Hold your phone flat to start. Tilt it like a tray to roll an iron ball through a maze to the hole — it can't fall off the edge, but watch for hazard holes that send you back to the start. Mazes are randomized every race. Everyone races at once; first to solve the Easy maze then the Hard maze wins.",
     },
     colormatch: {
       emoji: '🎨',
@@ -116,8 +119,10 @@
   function openSelectScreen(game) {
     pendingGame = game;
     pendingMode = GAME_INFO[game] && GAME_INFO[game].freeForAll ? 'ffa' : 'single';
+    pendingDifficulty = 'medium';
     selected = [];
     renderModeToggle();
+    renderDifficultyToggle();
     renderHowTo();
     renderSelectTitle();
     renderSelectList();
@@ -138,6 +143,26 @@
       btn.classList.toggle('active', btn.dataset.mode === pendingMode);
     });
   }
+
+  function renderDifficultyToggle() {
+    const wrap = el('select-difficulty');
+    const info = GAME_INFO[pendingGame];
+    if (!info || !info.hasDifficulty) {
+      wrap.style.display = 'none';
+      return;
+    }
+    wrap.style.display = 'flex';
+    wrap.querySelectorAll('.diff-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.diff === pendingDifficulty);
+    });
+  }
+
+  el('select-difficulty').querySelectorAll('.diff-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      pendingDifficulty = btn.dataset.diff;
+      renderDifficultyToggle();
+    });
+  });
 
   function renderHowTo() {
     const info = GAME_INFO[pendingGame];
@@ -218,7 +243,7 @@
       return;
     }
     socket.emit('host:setMatchPlayers', { code: roomCode, playerIds: selected });
-    socket.emit('host:startMatch', { code: roomCode, game: pendingGame });
+    socket.emit('host:startMatch', { code: roomCode, game: pendingGame, difficulty: pendingDifficulty });
   });
 
   // ---------- Game tiles ----------
@@ -466,7 +491,7 @@
     }
   });
 
-  socket.on('game:start', ({ game, players: matchPlayers }) => {
+  socket.on('game:start', ({ game, players: matchPlayers, seed, difficulty }) => {
     stopActiveGame();
     showScreen('game');
     const root = el('game-root');
@@ -482,6 +507,8 @@
       socket,
       roomCode,
       players: matchPlayers,
+      seed,
+      difficulty,
       onExit: inBracketMatch ? exitBracket : backToMenu,
       bracketMode: inBracketMatch,
       onMatchResult: inBracketMatch ? onBracketMatchResult : undefined,

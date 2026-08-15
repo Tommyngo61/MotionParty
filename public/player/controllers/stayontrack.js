@@ -40,8 +40,8 @@
 
   function start(root, ctx) {
     ensureStyle();
-    const { socket, opponents } = ctx;
-    const TRACKS = window.MP_TRACKS;
+    const { socket, opponents, seed, difficulty } = ctx;
+    const TRACKS = window.MP_generateTracks(seed, difficulty);
     const centerlineX = window.MP_trackCenterlineX;
 
     root.innerHTML = `
@@ -143,7 +143,7 @@
     function resumeAfterFall() {
       progress = 0;
       ballVelX = 0;
-      ballX = centerlineX(trackIndex, 0);
+      ballX = centerlineX(TRACKS[trackIndex], 0);
       raceState = 'racing';
       setMsg('', '', false);
     }
@@ -153,7 +153,7 @@
         trackIndex++;
         progress = 0;
         ballVelX = 0;
-        ballX = centerlineX(trackIndex, 0);
+        ballX = centerlineX(TRACKS[trackIndex], 0);
         trackLabel.textContent = `Track ${trackIndex + 1}/${TRACKS.length}`;
         if (window.MP_Feedback) window.MP_Feedback.play('success');
         flashToast(`${TRACKS[trackIndex - 1].name} complete!`);
@@ -181,7 +181,7 @@
       trackIndex = 0;
       progress = 0;
       ballVelX = 0;
-      ballX = centerlineX(0, 0);
+      ballX = centerlineX(TRACKS[0], 0);
       raceState = 'racing';
       pendingGo = false;
       setMsg('', '', false);
@@ -251,10 +251,17 @@
         return;
       }
       const lapT = track.type === 'loop' ? progress % 1 : progress;
-      const cl = centerlineX(trackIndex, lapT);
+      const cl = centerlineX(TRACKS[trackIndex], lapT);
       if (Math.abs(ballX - cl) > track.width / 2) {
         fallOff();
         return;
+      }
+      for (const obs of track.obstacles || []) {
+        if (Math.abs(lapT - obs.at) > obs.span / 2) continue;
+        if (Math.abs(ballX - (cl + obs.x)) < obs.width / 2) {
+          fallOff();
+          return;
+        }
       }
       timerLabel.textContent = ((now - raceStartTs) / 1000).toFixed(1) + 's';
       trackLabel.textContent = track.type === 'loop'
@@ -329,7 +336,7 @@
       const rightPts = [];
       for (let i = 0; i <= rows; i++) {
         const rf = i / rows;
-        const cl = centerlineX(trackIndex, rf);
+        const cl = centerlineX(TRACKS[trackIndex], rf);
         const y = (1 - rf) * H;
         leftPts.push([screenXFor(cl - track.width / 2), y]);
         rightPts.push([screenXFor(cl + track.width / 2), y]);
@@ -347,6 +354,39 @@
       c2d.beginPath();
       rightPts.forEach((p, i) => (i === 0 ? c2d.moveTo(p[0], p[1]) : c2d.lineTo(p[0], p[1])));
       strokeCurb(4);
+      drawObstacles(track);
+    }
+
+    // Obstacles are drawn as solid caution-orange blocks, sized/positioned exactly
+    // like the collision check in update() so what you see is what you'll hit.
+    function drawObstacles(track) {
+      for (const obs of track.obstacles || []) {
+        const clMid = centerlineX(track, obs.at);
+        const ocx = clMid + obs.x;
+        c2d.beginPath();
+        if (track.type === 'loop') {
+          const cx = W / 2, cy = H / 2, rx = loopRX(), ry = loopRY();
+          const rInner = 1 + ocx - obs.width / 2, rOuter = 1 + ocx + obs.width / 2;
+          const theta0 = (obs.at - obs.span / 2) * Math.PI * 2;
+          const theta1 = (obs.at + obs.span / 2) * Math.PI * 2;
+          c2d.moveTo(cx + Math.cos(theta0) * rInner * rx, cy + Math.sin(theta0) * rInner * ry);
+          c2d.lineTo(cx + Math.cos(theta1) * rInner * rx, cy + Math.sin(theta1) * rInner * ry);
+          c2d.lineTo(cx + Math.cos(theta1) * rOuter * rx, cy + Math.sin(theta1) * rOuter * ry);
+          c2d.lineTo(cx + Math.cos(theta0) * rOuter * rx, cy + Math.sin(theta0) * rOuter * ry);
+        } else {
+          const rf0 = Math.max(0, obs.at - obs.span / 2);
+          const rf1 = Math.min(1, obs.at + obs.span / 2);
+          const xLeft = screenXFor(ocx - obs.width / 2);
+          const xRight = screenXFor(ocx + obs.width / 2);
+          c2d.rect(xLeft, (1 - rf1) * H, xRight - xLeft, (rf1 - rf0) * H);
+        }
+        c2d.closePath();
+        c2d.fillStyle = '#ff9f3f';
+        c2d.fill();
+        c2d.strokeStyle = '#7a3a1f';
+        c2d.lineWidth = 2;
+        c2d.stroke();
+      }
     }
 
     function drawLoop(track) {
@@ -359,7 +399,7 @@
       for (let i = 0; i <= rows; i++) {
         const t = i / rows;
         const theta = t * Math.PI * 2;
-        const r = 1 + centerlineX(trackIndex, t) + half;
+        const r = 1 + centerlineX(TRACKS[trackIndex], t) + half;
         const x = cx + Math.cos(theta) * r * rx;
         const y = cy + Math.sin(theta) * r * ry;
         i === 0 ? c2d.moveTo(x, y) : c2d.lineTo(x, y);
@@ -367,7 +407,7 @@
       for (let i = rows; i >= 0; i--) {
         const t = i / rows;
         const theta = t * Math.PI * 2;
-        const r = 1 + centerlineX(trackIndex, t) - half;
+        const r = 1 + centerlineX(TRACKS[trackIndex], t) - half;
         const x = cx + Math.cos(theta) * r * rx;
         const y = cy + Math.sin(theta) * r * ry;
         c2d.lineTo(x, y);
@@ -376,9 +416,10 @@
       c2d.fillStyle = '#54585e';
       c2d.fill();
       strokeCurb(3);
+      drawObstacles(track);
 
       // start/finish marker at lap-progress 0
-      const cl0 = centerlineX(trackIndex, 0);
+      const cl0 = centerlineX(TRACKS[trackIndex], 0);
       const rInner = 1 + cl0 - half, rOuter = 1 + cl0 + half;
       c2d.strokeStyle = 'rgba(255,255,255,.85)';
       c2d.lineWidth = 3;

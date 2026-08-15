@@ -22,28 +22,40 @@ works on the host screen.
   you lose instantly. Both reaction times are shown, and the loser goes down in a
   cartoon "BANG!".
 - **Stay on Track** — Free-for-all balance race across 4 increasingly-tight courses,
-  each rendered on your own screen (not the TV). Hold your phone flat when the race
-  starts - the race won't begin until it's level, so nobody gets a head start. You
-  move forward on your own; **tilt left/right is the only control**, steering a ball
-  along a winding path that rolls with its own momentum rather than snapping to a
-  stop. The whole track is shown at once, so the ball visibly drives from the
-  bottom of the screen up to the top as you make progress, instead of the track
-  scrolling underneath a ball that stays put. Drift off the edge and the ball
-  visibly falls off the track, then restarts *that* track from the beginning — no
-  penalty beyond lost time. The first 3 tracks end when the ball reaches the top of
-  the screen, then the next track picks up right away; **Track 4 is a loop** shown
-  whole on screen, and you have to steer around it for 2 full laps to clear it.
-  First to clear all 4 tracks wins; the host screen shows every racer's live
-  progress bar.
+  each rendered on your own screen (not the TV). Pick a difficulty on the select
+  screen (**Easy/Medium/Hard/Impossible**) - it scales how narrow the courses get,
+  how fast they move, and how many caution-striped **obstacles** get dropped onto
+  them; every race also **rerolls the actual layout** (wobble shape and obstacle
+  placement) from a fresh random seed, so it's never the same course twice, even at
+  the same difficulty. Hold your phone flat when the race starts - the race won't
+  begin until it's level, so nobody gets a head start. You move forward on your
+  own; **tilt left/right is the only control**, steering a ball along a winding
+  path that rolls with its own momentum rather than snapping to a stop, dodging
+  obstacles as they come up. The whole track is shown at once, so the ball visibly
+  drives from the bottom of the screen up to the top as you make progress, instead
+  of the track scrolling underneath a ball that stays put. Drift off the edge (or
+  clip an obstacle) and the ball visibly falls off the track, then restarts *that*
+  track from the beginning — no penalty beyond lost time. The first 3 tracks end
+  when the ball reaches the top of the screen, then the next track picks up right
+  away; **Track 4 is a loop** shown whole on screen, and you have to steer around
+  it for 2 full laps to clear it. First to clear all 4 tracks wins; the host screen
+  shows every racer's live progress bar.
 - **Tilt Maze** — Free-for-all race to roll an iron ball through a maze to the hole,
-  on your own screen (not the TV), across an Easy maze then a Hard one. Hold your
-  phone flat to start, then tilt it like a tray — the ball rolls with real momentum
-  and slides along walls rather than clipping through them, and it can't fall off
-  since the maze itself is the boundary. Mazes are procedurally generated (a
-  spanning-tree "perfect maze" — exactly one path from start to the hole, so every
-  branch off it is a genuine dead end) but seeded, so every racer gets an identical
+  on your own screen (not the TV), across an Easy maze then a Hard one. Pick a
+  difficulty on the select screen - it scales how big both mazes are (a 4×4 warm-up
+  at Easy up to a 9×9 monster at Impossible) and how many **hazard holes** get
+  scattered through them; every race generates a **brand-new maze layout** from a
+  fresh random seed, so it's never the same maze twice. Hold your phone flat to
+  start, then tilt it like a tray — the ball rolls with real momentum and slides
+  along walls rather than clipping through them, and it can't fall off the outer
+  edge since the maze itself is the boundary — but drifting into a hazard hole
+  (shown as a dashed red pit, distinct from the dark finish hole) sends the ball
+  back to that maze's start and counts as another attempt, same idea as falling
+  off in Stay on Track. Mazes are procedurally generated (a spanning-tree "perfect
+  maze" — exactly one path from start to the hole, so every branch off it is a
+  genuine dead end) but seeded, so every racer in the same race gets an identical
   layout. First to solve both mazes wins; the host screen shows every racer's live
-  progress bar.
+  progress bar and attempt count.
 - **Color Match Relay** — Free-for-all. The TV flashes a target color; everyone
   grabs their phone, runs off to find something in the room that color, and
   photographs it within 5 seconds. Each photo is scored by averaging the pixels in
@@ -81,6 +93,11 @@ anyone starts.
 - **Free-for-all** (Stay on Track / Tilt Maze / Color Match Relay only) — no mode
   choice; pick any number of joined players (no upper limit) and everyone
   competes at once.
+- **Difficulty** (Stay on Track / Tilt Maze only) — Easy/Medium/Hard/Impossible
+  buttons appear on the select screen; the host's choice is sent to the server
+  along with Start Game, which scales the course/maze size and obstacle/hazard
+  count and rolls a fresh random seed. See [Randomization &
+  difficulty](#randomization--difficulty) below for what each tier actually does.
 
 **End Game**, visible in the top corner during any live match (and as *End
 Tournament* on the bracket screen), immediately aborts the current game or
@@ -158,8 +175,9 @@ server/
 public/
   index.html         Landing page (links to /host/ and /player/).
   shared/avatars.js  Hand-coded SVG animal avatars, shared by both apps.
-  shared/tracks.js   Procedural course definitions for Stay on Track, shared by both apps.
-  shared/mazes.js    Seeded procedural maze generation for Tilt Maze, shared by both apps.
+  shared/prng.js     Tiny seeded PRNG (mulberry32) used by tracks.js/mazes.js.
+  shared/tracks.js   Seeded, difficulty-scaled Stay on Track course generator, shared by both apps.
+  shared/mazes.js    Seeded, difficulty-scaled Tilt Maze generator, shared by both apps.
   shared/colors.js   Color-distance math for Color Match Relay, shared by both apps.
   shared/feedback.js Synthesized (Web Audio) sound effects + a vibrate() wrapper,
                      shared by both apps - see Sound, vibration & tutorials below.
@@ -209,17 +227,22 @@ control feel unresponsive.
   server picks the winner and every screen renders the result.
 - **Stay on Track**: each phone runs its own local tilt-maze simulation and canvas
   render (reading `deviceorientation` continuously, not just single gestures) so
-  steering feels instant. The server only broadcasts the synchronized `GO` signal
-  after the walk-in countdown and arbitrates the win (whichever phone's
-  `stayontrack:finish` arrives first, once all 4 tracks are cleared). Phones relay
-  their live track/progress/attempt count over the existing generic `player:input`
-  channel purely so the host can render a live progress bar — the host never
-  simulates this game.
+  steering feels instant. The server picks the difficulty-scaled random `seed` at
+  `host:startMatch` and includes it in the `game:start` broadcast; the host and
+  every phone then independently call `MP_generateTracks(seed, difficulty)` and get
+  the identical course layout without the server ever shipping the course data
+  itself. The server only broadcasts the synchronized `GO` signal after the walk-in
+  countdown and arbitrates the win (whichever phone's `stayontrack:finish` arrives
+  first, once all 4 tracks are cleared). Phones relay their live
+  track/progress/attempt count over the existing generic `player:input` channel
+  purely so the host can render a live progress bar — the host never simulates
+  this game.
 - **Tilt Maze**: same shape as Stay on Track - each phone runs its own local ball
-  physics and wall-collision simulation, the server just broadcasts `GO` after the
-  countdown and arbitrates the win off the first `tiltmaze:finish`, and phones relay
-  live maze-index/progress over the generic `player:input` channel for the host's
-  progress bar.
+  physics and wall-collision simulation, `game:start`'s `seed`/`difficulty` drive
+  the same independent-but-identical `MP_generateMazes` call on host and phones,
+  the server just broadcasts `GO` after the countdown and arbitrates the win off
+  the first `tiltmaze:finish`, and phones relay live maze-index/progress/attempt
+  count over the generic `player:input` channel for the host's progress bar.
 - **Color Match Relay**: the *server* picks the target color (so it can't be
   spoofed) and is authoritative for winning - each phone samples its own captured
   photo and computes its own match distance locally (so there's no latency between
@@ -245,6 +268,40 @@ tab. It plays a bracket by calling the normal match-start flow once per pairing 
 listening for that specific match to end, so `tennis.js`/`quickshoot.js`'s actual
 gameplay simulation is completely unmodified for bracket play - only their
 result-screen code branches on a `bracketMode` flag (see below).
+
+## Randomization & difficulty
+
+Stay on Track and Tilt Maze don't ship a fixed set of courses - `public/shared/
+tracks.js` and `mazes.js` each export a `generate(seed, difficulty)` function
+instead of a static array, and the host and every phone independently call it
+with the same server-issued `seed`/`difficulty` (from the `game:start` broadcast)
+to arrive at an identical layout without the server shipping the layout itself.
+A fresh `seed` is rolled on every `host:startMatch` (including Play Again), so
+races are never the same course twice - only the difficulty tier is sticky across
+Play Again, since it comes from the host's own `pendingDifficulty` state, not the
+server.
+
+Both generators are keyed on the same four tiers - `easy` / `medium` / `hard` /
+`impossible` - validated server-side against `DIFFICULTIES` in `server/index.js`
+(an unrecognized or missing value falls back to `medium`):
+
+- **Stay on Track** scales `width` (narrower = less room for error), `speed`, and
+  wobble `amp`litude per tier, still ramping harder across the 4 tracks within one
+  race the way the old fixed set did. From Medium up, each track also gets
+  `obstacleCount` caution-striped **obstacles** - a `{ at, span, x, width }` region
+  (progress-range × lateral-range) that acts exactly like the track edge: drift
+  into one and you fall off. They're generated hugging one side of the track so a
+  passable gap always remains on the other side; `public/player/controllers/
+  stayontrack.js`'s `drawObstacles` renders them and the same at/x/width math
+  gates the collision check in `update()`, so what you see is what you'll hit.
+- **Tilt Maze** scales both mazes' `cols`/`rows` together per tier (a 4×4 warm-up
+  up to a 9×9 monster at Impossible) and places `hazards` hole-shaped hazards per
+  maze from Medium up, kept at least 1.5 cells from both the start and finish so
+  nobody can fall in immediately or lose the race to a hazard sitting on the goal.
+  Falling into one (`HAZARD_R` capture radius in `public/player/controllers/
+  tiltmaze.js`) pauses briefly, respawns the ball at that maze's start, and
+  increments the same `attempts` counter Stay on Track uses - relayed to the host
+  the same way, so its progress bar can show "Attempt 2" etc for either game.
 
 ## Sound, vibration & tutorials
 
@@ -311,19 +368,23 @@ suspense is "will you jump the gun" rather than "did you guess the timing right"
 Stay on Track's canvas rendering (in `public/player/controllers/stayontrack.js`)
 uses a racetrack look - striped grass background, gray asphalt, red/white curb
 stripes (`drawGrass`/`strokeCurb`) - the ball itself is unchanged. Its difficulty
-lives in `public/shared/tracks.js` as `width` (how much drift is forgiven), `speed`
-(the *max* forward rate a full forward tilt can reach —
-players control their own pace, so this is a ceiling, not an autopilot), and
-`wobble` (sine terms that build the winding centerline the player has to follow).
-`type: 'loop'` plus a `laps` count turns a track into a closed circuit shown whole
-on screen instead of one that scrolls to a finish line; the same `wobble` formula
-just gets applied per-lap (see `centerlineX` in the same file). It's tuned so each
-track's *worst-case* required steering speed stays comfortably under what the ball's
-`STEER_ACCEL` constant (in `public/player/controllers/stayontrack.js`) can actually
-deliver — i.e. every track should be beatable with patient, accurate tilting, just
-progressively less forgiving of mistakes. If you widen the gap between the two
-you risk a track that's steering-rate-impossible rather than merely hard; if you
-tune it, sanity-check the new peak wobble slope against `STEER_ACCEL` the same way.
+lives in `public/shared/tracks.js`'s `TIERS` table: `width` (how much drift is
+forgiven - narrower per track within a race via `widthStep`, and per tier overall),
+`speed` (the *max* forward rate a full forward tilt can reach - players control
+their own pace, so this is a ceiling, not an autopilot, ramped by `speedStep`
+across the 4 tracks), `amp`/`ampStep` (wobble amplitude, same ramp shape), and
+`obstacleCount` (see [Randomization & difficulty](#randomization--difficulty)
+above). `type: 'loop'` plus a `laps` count (always the last of the 4 generated
+tracks) turns a track into a closed circuit shown whole on screen instead of one
+that scrolls to a finish line; the same `wobble` formula just gets applied per-lap
+(see `centerlineX` in the same file). It's tuned so each tier's *worst-case*
+required steering speed stays comfortably under what the ball's `STEER_ACCEL`
+constant (in `public/player/controllers/stayontrack.js`) can actually deliver —
+i.e. every track should be beatable with patient, accurate tilting, just
+progressively less forgiving of mistakes. If you widen the gap between a tier's
+`amp`/`speed` and `STEER_ACCEL` you risk a track that's steering-rate-impossible
+rather than merely hard; if you tune it, sanity-check the new peak wobble slope
+against `STEER_ACCEL` the same way, across all four tiers.
 
 Steering also has `STEER_DAMPING` (kept low on purpose) and `MAX_STEER_VEL` — low
 damping plus a velocity cap is what makes the ball carry its own momentum like it
@@ -337,16 +398,21 @@ axes must be level before the countdown-triggered `GO` actually starts the ball
 moving), so nobody gets a head start from already being tilted when it ends; it's
 unrelated to steering itself, which only reads gamma (left/right).
 
-Tilt Maze's difficulty lives in `public/shared/mazes.js` as `cols`/`rows` (grid
-size - bigger means more turns and longer dead ends) and `seed` (which layout the
-recursive-backtracker generator produces for that grid size; same seed always
-gives the same maze). Its ball physics (`ACCEL`, `DAMPING`, `MAX_VEL`) and the
-flat-start gate (`START_FLAT_DEG`) live in `public/player/controllers/tiltmaze.js`
-and follow the exact same "rolling ball" tuning philosophy as Stay on Track's
-steering, above. `BALL_R` and `WALL_HALF` (both in maze cell-units) size the
-collision circle and wall thickness for the slide-off-walls physics - if you
-shrink the maze's corridor width relative to those, tight turns can pinch the ball
-to a stop instead of letting it slide through.
+Tilt Maze's difficulty lives in `public/shared/mazes.js`'s `TIERS` table as
+`sizes` (the `[cols, rows]` pair for the Easy-named and Hard-named maze at that
+tier - bigger means more turns and longer dead ends) and `hazards` (hole count,
+see [Randomization & difficulty](#randomization--difficulty) above). The
+recursive-backtracker generator itself is deterministic per seed (same seed
+always gives the same maze) - `generateMazes` derives two distinct per-maze seeds
+from the match seed so the pair is never accidentally identical. Ball physics
+(`ACCEL`, `DAMPING`, `MAX_VEL`) and the flat-start gate (`START_FLAT_DEG`) live in
+`public/player/controllers/tiltmaze.js` and follow the exact same "rolling ball"
+tuning philosophy as Stay on Track's steering, above. `BALL_R` and `WALL_HALF`
+(both in maze cell-units) size the collision circle and wall thickness for the
+slide-off-walls physics - if you shrink the maze's corridor width relative to
+those, tight turns can pinch the ball to a stop instead of letting it slide
+through. `HAZARD_R` is the capture radius around a hazard hole (kept close to
+`FINISH_R` so both feel equally "easy to fall into" from the same careless drift).
 
 Color Match Relay's timing (`CM_COUNTDOWN_MS`, `CM_ROUND_MS`) and its target
 palette (`CM_PALETTE`) live in `server/index.js`, since the server is what picks

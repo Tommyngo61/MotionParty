@@ -12,7 +12,8 @@
       .tm-lane{display:flex;align-items:center;gap:1rem}
       .tm-lane img{width:56px;height:56px;border-radius:50%;background:#fff;flex-shrink:0}
       .tm-lane-info{flex:1;min-width:0}
-      .tm-lane-name{font-weight:800;margin-bottom:.4rem}
+      .tm-lane-name{font-weight:800;margin-bottom:.4rem;display:flex;justify-content:space-between}
+      .tm-lane-name .attempt{color:var(--text-dim);font-weight:600;font-size:.85rem}
       .tm-segs{display:flex;gap:.4rem}
       .tm-seg{flex:1;height:22px;border-radius:8px;background:var(--card-light);position:relative;overflow:hidden}
       .tm-seg .fill{position:absolute;inset:0;width:0%;background:linear-gradient(90deg,#3fd0c9,#3ddc84);
@@ -36,8 +37,8 @@
 
   function start(root, ctx) {
     ensureStyle();
-    const { socket, roomCode, players, onExit } = ctx;
-    const MAZES = window.MP_MAZES;
+    const { socket, roomCode, players, onExit, seed, difficulty } = ctx;
+    const MAZES = window.MP_generateMazes(seed, difficulty);
     let timers = [];
     const setT = (fn, ms) => { const id = setTimeout(fn, ms); timers.push(id); return id; };
 
@@ -47,7 +48,7 @@
         <div class="tm-lane" data-player="${p.id}">
           <img src="${avatarUrl(p.avatarId)}" />
           <div class="tm-lane-info">
-            <div class="tm-lane-name">${escapeHtml(p.name)}</div>
+            <div class="tm-lane-name"><span>${escapeHtml(p.name)}</span><span class="attempt" data-attempt></span></div>
             <div class="tm-segs" data-segs>${segs}</div>
           </div>
         </div>`;
@@ -76,7 +77,7 @@
       return wrap.querySelector(`.tm-lane[data-player="${playerId}"]`);
     }
 
-    function updateLane(playerId, { mazeIndex, progress }) {
+    function updateLane(playerId, { mazeIndex, progress, attempts }) {
       const lane = laneEl(playerId);
       if (!lane) return;
       const segEls = lane.querySelectorAll('[data-segs] .tm-seg');
@@ -92,6 +93,8 @@
           fill.style.width = '0%';
         }
       });
+      const attemptEl = lane.querySelector('[data-attempt]');
+      if (attemptEl) attemptEl.textContent = attempts > 1 ? `Attempt ${attempts}` : '';
     }
 
     function onInputRelay(data) {
@@ -128,7 +131,7 @@
       msgBox.appendChild(actions);
       msgBox.querySelector('#tm-menu').addEventListener('click', onExit);
       msgBox.querySelector('#tm-again').addEventListener('click', () => {
-        socket.emit('host:startMatch', { code: roomCode, game: 'tiltmaze' });
+        socket.emit('host:startMatch', { code: roomCode, game: 'tiltmaze', difficulty });
       });
     }
     socket.on('tiltmaze:result', onResult);
