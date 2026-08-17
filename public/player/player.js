@@ -95,6 +95,10 @@
     }
     const opponents = players.filter((p) => p.id !== playerId);
     const opponent = opponents[0]; // 1v1 games (tennis/quickshoot) only ever have exactly one
+    // "Play Again" fires another game:start without an intervening menu:show, so the
+    // previous controller (its socket listeners, timers, etc.) must be torn down here
+    // or they'd pile up round after round.
+    stopController();
     const root = el('controller-root');
     root.innerHTML = '';
     const mod = window.MP_CONTROLLERS && window.MP_CONTROLLERS[game];

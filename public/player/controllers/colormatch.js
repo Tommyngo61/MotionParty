@@ -10,7 +10,7 @@
       .cmc-hud{display:flex;justify-content:center;align-items:center;padding:.6rem 1rem;
         background:rgba(0,0,0,.35);color:#fff;font-weight:800;z-index:4}
       .cmc-stage{position:relative;flex:1;background:#000;overflow:hidden}
-      .cmc-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;transform:scaleX(-1) scaleX(1)}
+      .cmc-video{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
       .cmc-reticle{position:absolute;top:50%;left:50%;width:26%;height:26%;transform:translate(-50%,-50%);
         border:3px solid rgba(255,255,255,.85);border-radius:12px;box-shadow:0 0 0 999px rgba(0,0,0,.25);
         pointer-events:none}
@@ -39,6 +39,14 @@
 
   const MATCH_THRESHOLD = 110; // mirrors server's CM_MATCH_THRESHOLD
   const SAMPLE_FRAC = 0.26; // center sample square, as a fraction of the shorter video dimension - matches .cmc-reticle
+
+  // Kept alive across rounds (module scope survives start()/stop() cycles from "Play
+  // Again") so returning to Color Match Relay reuses the already-granted camera instead
+  // of prompting again every round.
+  let cachedStream = null;
+  function liveStream(s) {
+    return !!s && s.getVideoTracks().some((t) => t.readyState === 'live');
+  }
 
   function start(root, ctx) {
     ensureStyle();
@@ -92,14 +100,34 @@
     const raceIntro = opponents.length === 0 ? 'Get ready to match a color'
       : opponents.length === 1 ? `Racing ${opponents[0].name} to match the color`
       : `Racing ${opponents.length} others to match the color`;
-    setMsg('Point your camera at things!', raceIntro, true, true);
 
     let state = 'permission'; // permission | ready | racing | waiting-result | finished
-    let stream = null;
+    let stream = liveStream(cachedStream) ? cachedStream : null;
     let targetRgb = null;
     let roundEndsAt = 0;
     let rafId = null;
     let feedbackTimer = null;
+
+    function settleAfterStreamReady() {
+      if (roundEndsAt > performance.now()) {
+        // a round is already under way - jump straight in
+        state = 'racing';
+        captureBtn.disabled = false;
+        setMsg('', '', false, false);
+      } else {
+        state = 'ready';
+        setMsg('Get ready…', 'Waiting for the color…', true, false);
+      }
+    }
+
+    if (stream) {
+      // Already granted in an earlier round - skip the tap-to-enable prompt entirely.
+      video.srcObject = stream;
+      video.play().catch(() => {});
+      settleAfterStreamReady();
+    } else {
+      setMsg('Point your camera at things!', raceIntro, true, true);
+    }
 
     // Camera access needs an explicit tap to reliably prompt on iOS Safari, same
     // reasoning as the motion-permission request on the join screen.
@@ -107,17 +135,10 @@
       enableBtn.disabled = true;
       try {
         stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' }, audio: false });
+        cachedStream = stream;
         video.srcObject = stream;
         await video.play();
-        if (roundEndsAt > performance.now()) {
-          // a round is already under way - jump straight in
-          state = 'racing';
-          captureBtn.disabled = false;
-          setMsg('', '', false, false);
-        } else {
-          state = 'ready';
-          setMsg('Get ready…', 'Waiting for the color…', true, false);
-        }
+        settleAfterStreamReady();
       } catch (e) {
         enableBtn.disabled = false;
         setMsg('Camera blocked', 'Allow camera access for this site in your browser settings, then tap again.', true, true);
@@ -181,7 +202,7 @@
       const matched = distance <= MATCH_THRESHOLD;
 
       feedbackSwatch.style.background = capturedHex;
-      feedbackText.textContent = matched ? `🎯 ${pct}% match!` : `${pct}% match — try again!`;
+      feedbackText.textContent = matched ? `🎯 ${pct}% match!` : `${pct}% match!`;
       feedback.classList.toggle('good', matched);
       feedback.classList.add('show');
       clearTimeout(feedbackTimer);
@@ -192,10 +213,10 @@
       socket.emit('player:input', { gameEvent: 'colormatch:attempt', payload: { hex: capturedHex, distance: Math.round(distance) } });
       socket.emit('colormatch:submit', { hex: capturedHex, distance });
 
-      if (matched) {
-        captureBtn.disabled = true;
-        setMsg('Match found!', 'Waiting for the result…', true, false);
-      }
+      // Only one photo per round - lock the shutter the instant it's used, win or not.
+      captureBtn.disabled = true;
+      state = 'waiting-result';
+      setMsg(matched ? 'Match found!' : 'Photo taken!', 'Waiting for the result…', true, false);
     }
     captureBtn.addEventListener('click', captureAndSubmit);
 
@@ -220,7 +241,8 @@
       stop() {
         cancelAnimationFrame(rafId);
         clearTimeout(feedbackTimer);
-        if (stream) stream.getTracks().forEach((t) => t.stop());
+        // Deliberately leave the stream running (cached at module scope) so the next
+        // round of Color Match Relay doesn't have to ask for camera access again.
         socket.off('colormatch:go', onGo);
         socket.off('colormatch:result', onResult);
       },
