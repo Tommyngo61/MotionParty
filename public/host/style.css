@@ -67,6 +67,12 @@ body{background:radial-gradient(circle at 50% -10%,var(--bg-mid),var(--bg-deep) 
 .diff-btn[data-diff="medium"].active{border-color:var(--accent-yellow);color:#16233d;background:var(--card-light)}
 .diff-btn[data-diff="hard"].active{border-color:var(--accent-orange);color:#16233d;background:var(--card-light)}
 .diff-btn[data-diff="impossible"].active{border-color:var(--accent-red);color:#16233d;background:var(--card-light)}
+.select-trivia-config{display:none;flex-direction:column;align-items:center;gap:.7rem;margin-bottom:1.5rem}
+.tmode-row{display:flex;gap:.6rem}
+.tmode-btn{border:2px solid rgba(22,35,61,.18);background:var(--card);color:var(--text-dim);border-radius:12px;
+  padding:.6rem 1.2rem;font-weight:800;font-size:.95rem;cursor:pointer;transition:border-color .15s,color .15s,background .15s}
+.tmode-btn.active{border-color:var(--accent-pink);color:#16233d;background:var(--card-light)}
+.deduct-toggle{display:flex;align-items:center;gap:.5rem;color:var(--text-dim);font-weight:600;font-size:.9rem;cursor:pointer}
 .select-list{display:flex;flex-wrap:wrap;gap:1.2rem;justify-content:center;max-width:900px}
 .select-card{background:var(--card);border:3px solid transparent;border-radius:18px;padding:1rem 1.4rem;
   display:flex;flex-direction:column;align-items:center;gap:.5rem;cursor:pointer;width:130px;
@@ -75,6 +81,9 @@ body{background:radial-gradient(circle at 50% -10%,var(--bg-mid),var(--bg-deep) 
 .select-card.selected{border-color:var(--accent-teal);background:var(--card-light)}
 .select-card .badge{font-size:.75rem;color:var(--accent-teal);font-weight:800;visibility:hidden}
 .select-card.selected .badge{visibility:visible}
+.team-toggle{border:none;border-radius:8px;padding:.25rem .7rem;font-size:.75rem;font-weight:800;cursor:pointer;color:#fff}
+.team-toggle.team-A{background:#1e88e5}
+.team-toggle.team-B{background:#e53935}
 .select-actions{display:flex;gap:1rem;margin-top:2rem}
 
 .btn{border:none;border-radius:14px;padding:.9rem 1.8rem;font-size:1.05rem;font-weight:800;cursor:pointer}

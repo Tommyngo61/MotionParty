@@ -9,8 +9,9 @@ name and an animal avatar, and play by swinging/aiming their phone.
 Motion Tennis and 1-2-3 Shoot! are 1v1 games - play a **Single Play** match between
 2 people, or run a **Tournament Bracket** (single-elimination, 3+ players). Stay on
 Track, Tilt Maze, and Color Match Relay are **Free-for-all** - any number of players
-compete at once, no bracket needed. See [Modes](#modes) below for how that choice
-works on the host screen.
+compete at once, no bracket needed. Trivia Throwdown is free-for-all too, but can
+also be split into **Teams** instead. See [Modes](#modes) below for how these
+choices work on the host screen.
 
 - **Motion Tennis** — Wii-Sports-style angled court. Your character auto-moves
   into position; you just swing your phone like a racket when the ball is in range.
@@ -68,6 +69,27 @@ works on the host screen.
   hanging. The result screen shows everyone's captured swatch side by side, best
   match first, so you can see just how far off that "definitely maroon" sock really
   was.
+- **Trivia Throwdown** — Free-for-all (or Teams), the one game that isn't about
+  motion at all - phones are a touchscreen game-show buzzer/controller instead.
+  Choose **Free-for-all** or **Teams** (exactly two teams, drag players onto
+  Team A/B on the select screen) before starting. The TV shows a 5×5 board - 5
+  categories × $100-$500, difficulty scaling with value - and whoever's turn it
+  is picks a category/value on their *own* phone; the TV reveals the clue and
+  every phone shows a big **BUZZ** button. First tap wins the buzz (server
+  arrival order - simplest fair "timestamp comparison" for a room full of
+  independently-clocked phones); everyone answers **out loud**, and the host
+  taps ✅/❌ on the TV to judge it, the same way an actual game-show host would
+  - free-text grading isn't reliable enough for open trivia. Correct awards the
+  tile's value and clears it; wrong can optionally deduct that value (a toggle
+  at setup) and reopens the buzz to whoever hasn't already missed this clue. One
+  random tile every board is a hidden **Daily Double** - the picking player/team
+  wagers any amount up to their current score *before* the clue shows, then
+  answers alone (no buzz race); correct doubles the wager and adds it, wrong
+  subtracts it. Once the board is cleared, the top 2 scorers move on to a
+  **Face-Off**: five survey-style questions (Family-Feud style - "Name
+  something you'd find in a kitchen") where both finalists type a free-text
+  guess, matched against a pre-set weighted answer list. Whoever has the higher
+  *overall* score once the Face-Off ends wins the game.
 - **Fruit Ninja** — on the menu as "coming soon", intentionally skipped for now.
 
 All character art is hand-drawn as plain SVG shapes in `public/shared/avatars.js` —
@@ -90,14 +112,20 @@ anyone starts.
   Again" when it ends - until a single champion remains. A drawn/no-show 1-2-3
   Shoot! match (nobody drew) just replays instead of advancing, since a bracket
   match can't end in a tie.
-- **Free-for-all** (Stay on Track / Tilt Maze / Color Match Relay only) — no mode
-  choice; pick any number of joined players (no upper limit) and everyone
-  competes at once.
+- **Free-for-all** (Stay on Track / Tilt Maze / Color Match Relay / Trivia
+  Throwdown only) — no mode choice; pick any number of joined players (no upper
+  limit) and everyone competes at once.
 - **Difficulty** (Stay on Track / Tilt Maze only) — Easy/Medium/Hard/Impossible
   buttons appear on the select screen; the host's choice is sent to the server
   along with Start Game, which scales the course/maze size and obstacle/hazard
   count and rolls a fresh random seed. See [Randomization &
   difficulty](#randomization--difficulty) below for what each tier actually does.
+- **Teams** (Trivia Throwdown only) — a Free-for-all/Teams toggle appears
+  alongside a "Deduct points for wrong answers" checkbox. Switching to Teams
+  gives every already-selected player card a Team A/B chip (click to flip it);
+  Start Game is disabled until both teams have at least one member. Exactly two
+  teams, never more - Trivia's Face-Off round needs "the top 2 scorers" to mean
+  something concrete, and two teams maps onto that directly.
 
 **End Game**, visible in the top corner during any live match (and as *End
 Tournament* on the bracket screen), immediately aborts the current game or
@@ -169,16 +197,23 @@ prompt either.
 server/
   index.js     Express static hosting + Socket.IO: rooms, lobby, relay, and the
                server-authoritative 1-2-3 Shoot / Stay on Track / Tilt Maze /
-               Color Match Relay timing state machines.
+               Color Match Relay / Trivia Throwdown timing + game-logic state
+               machines.
   rooms.js     In-memory room/player store.
 
 public/
   index.html         Landing page (links to /host/ and /player/).
   shared/avatars.js  Hand-coded SVG animal avatars, shared by both apps.
-  shared/prng.js     Tiny seeded PRNG (mulberry32) used by tracks.js/mazes.js.
+  shared/prng.js     Tiny seeded PRNG (mulberry32) - a plain browser <script> AND
+                     a Node require() (server/index.js needs it too, for Trivia
+                     Throwdown - see below), so it can't assume window or module.
   shared/tracks.js   Seeded, difficulty-scaled Stay on Track course generator, shared by both apps.
   shared/mazes.js    Seeded, difficulty-scaled Tilt Maze generator, shared by both apps.
   shared/colors.js   Color-distance math for Color Match Relay, shared by both apps.
+  shared/trivia.js   Trivia Throwdown's category/clue/Face-Off content pool and
+                     board generator - same dual browser-script-or-Node-require
+                     trick as prng.js, but only actually require()'d by the
+                     server; see Trivia Throwdown below for why.
   shared/feedback.js Synthesized (Web Audio) sound effects + a vibrate() wrapper,
                      shared by both apps - see Sound, vibration & tutorials below.
   shared/tutorial.js The inline autoplaying select-screen demo + window.MP_TUTORIALS
@@ -192,6 +227,7 @@ public/
     games/stayontrack.js
     games/tiltmaze.js
     games/colormatch.js
+    games/trivia.js
     tutorials/       Captured gameplay GIFs used by MP_TUTORIALS entries that have
                      real footage (see Sound, vibration & tutorials below).
 
@@ -202,6 +238,7 @@ public/
     controllers/stayontrack.js
     controllers/tiltmaze.js
     controllers/colormatch.js
+    controllers/trivia.js
 ```
 
 ### How input flows
@@ -253,6 +290,16 @@ control feel unresponsive.
   show everyone's live "trying…" swatch, and are kept server-side as each player's
   best attempt in case the round times out with nobody clearing the threshold -
   the closest overall attempt wins instead.
+- **Trivia Throwdown**: the *server* is authoritative for essentially everything
+  - board content, whose turn it is, the buzz race, and Face-Off answer
+  grading - since unlike the other games there's no physics to run locally, just
+  turn-taking and judgment calls a room full of independent phones can't be
+  trusted to agree on by themselves. It's also the one game with its own
+  dedicated `trivia:*` socket events instead of the generic `player:input`
+  relay, because there's real per-message validation to do (is it actually your
+  turn to pick, did you already whiff this clue, is your Face-Off answer even
+  from a finalist) that a blind relay can't provide. See [Trivia
+  Throwdown](#trivia-throwdown) below for the full picture.
 
 Stay on Track, Tilt Maze, and Color Match Relay are free-for-all: any number of
 racers can be in `room.matchPlayers`, "winner" is just whoever's server-arbitrated
@@ -349,6 +396,67 @@ Every game gets three layers of feedback beyond its visuals:
     `colormatch.js`'s `render()` functions are the reference examples for this
     style.
 
+## Trivia Throwdown
+
+The odd one out - a touchscreen game-show buzzer/board instead of a motion game -
+so its architecture works differently enough from the other five to be worth
+spelling out on its own.
+
+**Content lives in `public/shared/trivia.js`** as a pool of 8 categories (5 clues
+each, `$100`-`$500`) and 6 Family-Feud-style Face-Off prompts, all original
+(nothing copied from any actual quiz show). `MP_generateTriviaBoard(seed)` picks 5
+of the 8 categories and one hidden Daily Double tile; `MP_generateTriviaFaceoff(seed)`
+picks 5 of the 6 Face-Off prompts. Unlike tracks.js/mazes.js, **only the server
+calls these** - trivia.js is written to work as both a browser `<script>` and a
+plain Node `require()` (see the `module.exports`/`window` branches at the bottom of
+both it and prng.js) specifically so `server/index.js` can `require('../public/
+shared/trivia.js')` directly and stay the single source of truth for what's on the
+board. The host and phones never generate their own copy; the server pushes the
+actual category names, clue text, and Face-Off prompts to them over `trivia:board`/
+`trivia:clue`/`trivia:faceoffQuestion` as each one becomes relevant - closer to how
+Color Match Relay's server-picked target color works than to Stay on Track/Tilt
+Maze's "everyone regenerates the same thing locally" pattern, because the *A*
+Daily Double's position needs to stay hidden from clients until it's picked, the
+same way the target color needs to stay hidden until reveal.
+
+**Turn order, buzzing, and judging** all live in `room.gameState` on the server
+(`server/index.js`'s `startTrivia`/`triviaOpenClue`/etc). A "scorable entity" is a
+playerId in Free-for-all mode or `'A'`/`'B'` in Teams mode (`triviaEntityFor()`
+maps one to the other), so the exact same board/buzz/judge code path handles both
+modes without a fork. Buzzing in is a plain race for server arrival order across
+however many phones call `trivia:buzz` while the buzz window is open - simpler and
+more tamper-resistant than trusting each phone's own clock, and "the same pattern
+as a reaction-time buzzer" the spec asked for really just means *some* form of
+server-side timestamp comparison, which arrival order already is. The host's ✅/❌
+buttons (`trivia:judge`, host-only - checked against `room.hostSocketId`) are the
+one place a human makes a correctness call instead of code, because grading
+free-form spoken trivia answers isn't something free-text matching can do
+reliably - unlike the Face-Off round below, where the answer space per question is
+small and predictable enough that automatic matching actually works.
+
+**Daily Double** is a single random tile (`gs.dailyDouble`, chosen once per board,
+never sent to clients until the holder picks it) that swaps the normal buzz race
+for a private wager: `trivia:wager` is bounded server-side to `0..thatEntity's
+current score`, then the same `triviaOpenClue` path runs but auto-assigns the buzz
+to the wagering entity instead of opening it up, and a wrong answer isn't
+reopened to anyone else - one shot, like the real thing. Correct doubles the
+wagered amount and adds it (`score += wager * 2`); wrong subtracts the wager
+(`score -= wager`) - that's a deliberately more generous swing than a real Daily
+Double's "just add/subtract the wager once," a per-this-project design choice, not
+a bug.
+
+**Face-Off** kicks off once every tile is cleared (`gs.cleared` all `true`): the
+top 2 scorers by `entities.sort()` become the finalists, and `public/shared/
+trivia.js`'s `matchAnswer()` normalizes each finalist's free-text guess
+(lowercase, strip punctuation) and checks it against every answer slot's `accept`
+list for either string containing the other - so "fridge" / "a fridge" /
+"refrigerator" all land on the same slot. Both finalists (or anyone on a finalist
+team) can submit once per question; matched points add to that finalist's score
+independently, so both can score on the same question. The game's actual winner is
+whoever has the higher *combined* score (board round + Face-Off) once all 5
+questions resolve - not a separate Face-Off-only tally - since the Face-Off is
+framed as the decider for the whole match, not a fresh mini-game.
+
 ## Tuning
 
 Motion thresholds (swing sensitivity, draw sensitivity) are simple constants at the
@@ -427,6 +535,20 @@ matches read as misses; lower it if matches feel too easy. `SAMPLE_FRAC` in the
 same file controls how big a square (as a fraction of the shorter video
 dimension) gets averaged into the sampled color - matches the `.cmc-reticle`
 outline shown on the viewfinder, so change them together.
+
+Trivia Throwdown's content (categories/clues/Face-Off prompts) lives in the
+`CATEGORY_POOL`/`FACEOFF_POOL` arrays at the top of `public/shared/trivia.js` -
+add entries there (each category needs exactly 5 clues, ordered easiest to
+hardest) and they're automatically in the random-5-of-N rotation, no other code
+changes needed. Its timing (`TR_COUNTDOWN_MS`, `TR_BUZZ_WINDOW_MS`,
+`TR_WAGER_TIMEOUT_MS`, `TR_FACEOFF_ANSWER_MS`, etc) lives in `server/index.js`
+next to the other games' constants. `TR_BUZZ_WINDOW_MS` (12s) is the one worth
+tuning to the room - too short and slower typers/talkers never get a shot at
+buzzing; too long and a stalled clue drags the pace down. Face-Off answer
+matching (`matchAnswer()` in trivia.js) is intentionally forgiving (substring
+match either direction) rather than exact - add more `accept` synonyms per
+answer slot if real playtesting shows people phrasing a correct-in-spirit answer
+in a way that isn't matching.
 
 ## Adding the next game
 

@@ -5,6 +5,9 @@
   let pendingGame = null;
   let pendingMode = 'single'; // 'single' | 'bracket' | 'ffa'
   let pendingDifficulty = 'medium'; // 'easy' | 'medium' | 'hard' | 'impossible' - games with hasDifficulty only
+  let pendingTriviaMode = 'ffa'; // 'ffa' | 'teams' - Trivia Throwdown only
+  let pendingTeams = {}; // playerId -> 'A' | 'B' - Trivia Throwdown teams mode only
+  let pendingDeductWrong = false; // Trivia Throwdown only
   let selected = [];
   let activeGameHandle = null;
   let bracket = null; // { game, rounds: [[{a,b,winnerId}]], roundIndex, entrantNames } while a tournament is running
@@ -41,6 +44,13 @@
       name: 'Color Match Relay',
       freeForAll: true,
       howTo: 'A color flashes on the TV — run and find something in the room that color, then photograph it with your phone camera within 5 seconds. Everyone competes at once; first close-enough match wins the round.',
+    },
+    trivia: {
+      emoji: '🧠',
+      name: 'Trivia Throwdown',
+      freeForAll: true,
+      hasTeams: true,
+      howTo: "Pick a category and dollar value on your phone when it's your turn — the TV reveals the clue, then everyone races to buzz in first. Answer out loud; the host judges it. One hidden tile each board is a Daily Double — wager some of your own points before it's revealed. Clear the board and the top 2 scorers face off in a survey-question round for the win.",
     },
   };
 
@@ -106,6 +116,9 @@
   // ---------- Player select screen ----------
   function minPlayersFor(game, mode) {
     const info = GAME_INFO[game];
+    // Trivia's buzz race and "top 2 scorers" Face-Off need at least 2 people,
+    // unlike the other free-for-all games which allow solo play.
+    if (game === 'trivia') return 2;
     if (info && info.freeForAll) return 1;
     return mode === 'bracket' ? 3 : 2;
   }
@@ -120,9 +133,13 @@
     pendingGame = game;
     pendingMode = GAME_INFO[game] && GAME_INFO[game].freeForAll ? 'ffa' : 'single';
     pendingDifficulty = 'medium';
+    pendingTriviaMode = 'ffa';
+    pendingTeams = {};
+    pendingDeductWrong = false;
     selected = [];
     renderModeToggle();
     renderDifficultyToggle();
+    renderTriviaConfig();
     renderHowTo();
     renderSelectTitle();
     renderSelectList();
@@ -164,6 +181,37 @@
     });
   });
 
+  function renderTriviaConfig() {
+    const wrap = el('select-trivia-config');
+    const info = GAME_INFO[pendingGame];
+    if (!info || !info.hasTeams) {
+      wrap.style.display = 'none';
+      return;
+    }
+    wrap.style.display = 'flex';
+    wrap.querySelectorAll('.tmode-btn').forEach((btn) => {
+      btn.classList.toggle('active', btn.dataset.tmode === pendingTriviaMode);
+    });
+    el('trivia-deduct-check').checked = pendingDeductWrong;
+  }
+
+  el('select-trivia-config').querySelectorAll('.tmode-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      pendingTriviaMode = btn.dataset.tmode;
+      if (pendingTriviaMode === 'teams') {
+        // Give every already-selected player a sane default team so the
+        // per-card toggle always starts from a valid, roughly-even split.
+        selected.forEach((id, i) => { if (!pendingTeams[id]) pendingTeams[id] = i % 2 === 0 ? 'A' : 'B'; });
+      }
+      renderTriviaConfig();
+      renderSelectList();
+    });
+  });
+
+  el('trivia-deduct-check').addEventListener('change', (e) => {
+    pendingDeductWrong = e.target.checked;
+  });
+
   function renderHowTo() {
     const info = GAME_INFO[pendingGame];
     el('select-howto').textContent = info ? info.howTo : '';
@@ -198,6 +246,7 @@
       p.textContent = 'No players yet — have them scan the QR code first.';
       list.appendChild(p);
     }
+    const showTeamToggle = pendingGame === 'trivia' && pendingTriviaMode === 'teams';
     for (const p of players.values()) {
       const card = document.createElement('div');
       card.className = 'select-card' + (selected.includes(p.id) ? ' selected' : '');
@@ -206,16 +255,31 @@
       name.textContent = p.name;
       name.style.fontWeight = '700';
       card.appendChild(name);
-      const badge = document.createElement('div');
-      badge.className = 'badge';
-      badge.textContent = 'READY';
-      card.appendChild(badge);
+      if (showTeamToggle && selected.includes(p.id)) {
+        const team = pendingTeams[p.id] === 'B' ? 'B' : 'A';
+        const teamBtn = document.createElement('button');
+        teamBtn.className = 'team-toggle team-' + team;
+        teamBtn.textContent = 'Team ' + team;
+        teamBtn.addEventListener('click', (e) => {
+          e.stopPropagation(); // don't also trigger the card's own deselect click
+          pendingTeams[p.id] = team === 'A' ? 'B' : 'A';
+          renderSelectList();
+        });
+        card.appendChild(teamBtn);
+      } else {
+        const badge = document.createElement('div');
+        badge.className = 'badge';
+        badge.textContent = 'READY';
+        card.appendChild(badge);
+      }
       card.addEventListener('click', () => toggleSelect(p.id));
       list.appendChild(card);
     }
     const min = minPlayersFor(pendingGame, pendingMode);
     const max = maxPlayersFor(pendingGame, pendingMode);
-    el('select-start').disabled = selected.length < min || selected.length > max;
+    const teamsIncomplete = showTeamToggle && selected.length > 0
+      && (!selected.some((id) => (pendingTeams[id] || 'A') === 'A') || !selected.some((id) => (pendingTeams[id] || 'A') === 'B'));
+    el('select-start').disabled = selected.length < min || selected.length > max || teamsIncomplete;
     el('select-start').textContent = pendingMode === 'bracket' ? 'Start Tournament' : 'Start Game';
   }
 
@@ -223,12 +287,16 @@
     const max = maxPlayersFor(pendingGame, pendingMode);
     if (selected.includes(id)) {
       selected = selected.filter((x) => x !== id);
+      delete pendingTeams[id];
     } else {
       if (selected.length >= max) {
         toast(max === 2 ? 'Only 2 players for this mode — deselect one first.' : `Only ${max} players max — deselect one first.`);
         return;
       }
       selected.push(id);
+      if (pendingGame === 'trivia' && pendingTriviaMode === 'teams') {
+        pendingTeams[id] = selected.length % 2 === 1 ? 'A' : 'B';
+      }
     }
     renderSelectList();
   }
@@ -243,7 +311,10 @@
       return;
     }
     socket.emit('host:setMatchPlayers', { code: roomCode, playerIds: selected });
-    socket.emit('host:startMatch', { code: roomCode, game: pendingGame, difficulty: pendingDifficulty });
+    socket.emit('host:startMatch', {
+      code: roomCode, game: pendingGame, difficulty: pendingDifficulty,
+      mode: pendingTriviaMode, teams: pendingTeams, deductWrong: pendingDeductWrong,
+    });
   });
 
   // ---------- Game tiles ----------
@@ -509,6 +580,11 @@
       players: matchPlayers,
       seed,
       difficulty,
+      // Trivia Throwdown only - the host already knows what it just asked the
+      // server to start, so these ride along locally rather than round-tripping.
+      mode: pendingTriviaMode,
+      teams: pendingTeams,
+      deductWrong: pendingDeductWrong,
       onExit: inBracketMatch ? exitBracket : backToMenu,
       bracketMode: inBracketMatch,
       onMatchResult: inBracketMatch ? onBracketMatchResult : undefined,

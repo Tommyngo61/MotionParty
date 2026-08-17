@@ -53,6 +53,11 @@
               <div class="tile-name">Color Match Relay</div>
               <div class="tile-sub">Free-for-all · Photograph the color</div>
             </button>
+            <button class="game-tile" data-game="trivia">
+              <div class="tile-emoji">🧠</div>
+              <div class="tile-name">Trivia Throwdown</div>
+              <div class="tile-sub">Teams or FFA · Buzz-in trivia board</div>
+            </button>
             <button class="game-tile locked" disabled>
               <div class="tile-emoji">🍉</div>
               <div class="tile-name">Fruit Ninja</div>
@@ -77,6 +82,15 @@
         <button class="diff-btn" data-diff="medium">Medium</button>
         <button class="diff-btn" data-diff="hard">Hard</button>
         <button class="diff-btn" data-diff="impossible">Impossible</button>
+      </div>
+      <div id="select-trivia-config" class="select-trivia-config">
+        <div class="tmode-row">
+          <button class="tmode-btn" data-tmode="ffa">Free-for-all</button>
+          <button class="tmode-btn" data-tmode="teams">Teams</button>
+        </div>
+        <label class="deduct-toggle">
+          <input type="checkbox" id="trivia-deduct-check" /> Deduct points for wrong answers
+        </label>
       </div>
       <div id="select-list" class="select-list"></div>
       <div class="select-actions">
@@ -117,6 +131,7 @@
   <script src="games/stayontrack.js"></script>
   <script src="games/tiltmaze.js"></script>
   <script src="games/colormatch.js"></script>
+  <script src="games/trivia.js"></script>
   <script src="host.js"></script>
 </body>
 </html>

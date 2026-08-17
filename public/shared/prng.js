@@ -1,8 +1,11 @@
 // Tiny seeded PRNG shared by anything that needs a deterministic random sequence
-// from a numeric seed - e.g. generating a maze/track layout that the host and
-// every player's phone can independently reproduce identically from the same
-// server-issued seed, without the server having to ship the whole layout.
-(function (global) {
+// from a numeric seed - e.g. generating a maze/track/trivia-board layout that the
+// server, the host, and every player's phone can independently reproduce
+// identically from the same server-issued seed, without the server having to
+// ship the whole layout. Works both as a browser <script> (attaches to window)
+// and as a plain Node require() (server/index.js uses it for Trivia Throwdown),
+// so it can't assume either module or window exists.
+(function () {
   function mulberry32(seed) {
     let a = seed >>> 0;
     return function () {
@@ -14,5 +17,6 @@
     };
   }
 
-  global.MP_mulberry32 = mulberry32;
-})(window);
+  if (typeof module !== 'undefined' && module.exports) module.exports = { MP_mulberry32: mulberry32 };
+  if (typeof window !== 'undefined') window.MP_mulberry32 = mulberry32;
+})();

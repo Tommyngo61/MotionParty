@@ -5,6 +5,7 @@ const { Server } = require('socket.io');
 const QRCode = require('qrcode');
 const { nanoid } = require('nanoid');
 const { RoomStore } = require('./rooms');
+const trivia = require('../public/shared/trivia.js');
 
 const app = express();
 const server = http.createServer(app);
@@ -76,6 +77,16 @@ const CM_PALETTE = [
 // camera's white balance/lighting skews colors a fair amount.
 const CM_MATCH_THRESHOLD = 110;
 
+// ---- Trivia Throwdown timing constants (ms) ----
+const TR_COUNTDOWN_MS = 3000; // must match the "get ready" beat shown on host + phones
+const TR_BUZZ_WINDOW_MS = 12000; // how long the buzz-in stays open before the tile auto-clears unscored
+const TR_WAGER_TIMEOUT_MS = 20000; // Daily Double: default to a $0 wager if nobody submits one in time
+const TR_BOARD_TO_FACEOFF_DELAY = 3000; // pause after the last tile clears before the Face-Off intro
+const TR_FACEOFF_COUNTDOWN_MS = 3000;
+const TR_FACEOFF_ANSWER_MS = 15000; // per-question answer window
+const TR_FACEOFF_REVEAL_MS = 2600; // pause showing a Face-Off question's result before the next one
+const TR_MODES = ['ffa', 'teams'];
+
 function clearGameTimers(room) {
   if (room.gameState && room.gameState.timers) {
     room.gameState.timers.forEach((t) => clearTimeout(t));
@@ -121,19 +132,22 @@ io.on('connection', (socket) => {
     io.to(room.code).emit('match:playersSet', { players });
   });
 
-  socket.on('host:startMatch', ({ code, game, difficulty }) => {
+  socket.on('host:startMatch', ({ code, game, difficulty, mode, teams, deductWrong }) => {
     const room = store.getRoom(code);
     if (!room || room.hostSocketId !== socket.id) return;
-    const isFreeForAll = game === 'stayontrack' || game === 'tiltmaze' || game === 'colormatch';
-    const minPlayers = isFreeForAll ? 1 : 2;
+    const isFreeForAll = game === 'stayontrack' || game === 'tiltmaze' || game === 'colormatch' || game === 'trivia';
+    // Trivia's buzz-race and Face-Off ("top 2 scorers") only make sense with at
+    // least 2 in the game, unlike the other free-for-all games which allow solo play.
+    const minPlayers = game === 'trivia' ? 2 : (isFreeForAll ? 1 : 2);
     const maxPlayers = isFreeForAll ? Infinity : 2;
     if (!room.matchPlayers || room.matchPlayers.length < minPlayers || room.matchPlayers.length > maxPlayers) return;
 
     clearGameTimers(room);
     room.currentGame = game;
-    // A fresh random seed every match is what makes Stay on Track / Tilt Maze
-    // layouts different each time instead of the same fixed course - the host
-    // and every player regenerate the identical layout from this one number.
+    // A fresh random seed every match is what makes Stay on Track / Tilt Maze /
+    // Trivia Throwdown layouts different each time instead of the same fixed
+    // course - the host and every player regenerate the identical layout from
+    // this one number.
     const seed = Math.floor(Math.random() * 0xffffffff);
     const safeDifficulty = DIFFICULTIES.includes(difficulty) ? difficulty : 'medium';
     room.gameState = { phase: 'starting', timers: [], resolved: false, seed, difficulty: safeDifficulty };
@@ -149,6 +163,8 @@ io.on('connection', (socket) => {
       startTiltMaze(room);
     } else if (game === 'colormatch') {
       startColorMatch(room);
+    } else if (game === 'trivia') {
+      startTrivia(room, { mode, teams, deductWrong });
     }
   });
 
@@ -315,6 +331,123 @@ io.on('connection', (socket) => {
         winnerDistance: Math.round(clamped),
         attempts: gs.attempts,
       });
+    }
+  });
+
+  // Trivia Throwdown: active player/team picks a board tile.
+  socket.on('trivia:pickTile', ({ catIndex, valIndex }) => {
+    const room = store.getRoom(socket.data.roomCode);
+    if (!room || room.currentGame !== 'trivia' || !room.gameState) return;
+    const gs = room.gameState;
+    if (gs.phase !== 'board') return;
+    const entity = triviaEntityFor(room, socket.data.playerId);
+    if (!entity || entity !== gs.activeEntity) return;
+    if (!Number.isInteger(catIndex) || !Number.isInteger(valIndex)) return;
+    if (catIndex < 0 || catIndex > 4 || valIndex < 0 || valIndex > 4) return;
+    if (gs.cleared[catIndex][valIndex]) return;
+
+    gs.pendingTile = { catIndex, valIndex };
+    const isDailyDouble = gs.dailyDouble.cat === catIndex && gs.dailyDouble.val === valIndex;
+    if (isDailyDouble) {
+      gs.phase = 'wager';
+      gs.wagerEntity = entity;
+      clearGameTimers(room);
+      gs.timers = [];
+      io.to(room.code).emit('trivia:dailyDouble', {
+        catIndex, valIndex, entity, maxWager: Math.max(0, gs.scores[entity] || 0),
+      });
+      gs.timers.push(setTimeout(() => {
+        if (gs.phase === 'wager') triviaSubmitWager(room, entity, 0);
+      }, TR_WAGER_TIMEOUT_MS));
+    } else {
+      triviaOpenClue(room, catIndex, valIndex, 0);
+    }
+  });
+
+  // Trivia Throwdown: Daily Double wager, bounded to the selecting entity's own score.
+  socket.on('trivia:wager', ({ amount }) => {
+    const room = store.getRoom(socket.data.roomCode);
+    if (!room || room.currentGame !== 'trivia' || !room.gameState) return;
+    const gs = room.gameState;
+    if (gs.phase !== 'wager') return;
+    const entity = triviaEntityFor(room, socket.data.playerId);
+    if (!entity || entity !== gs.wagerEntity) return;
+    triviaSubmitWager(room, entity, amount);
+  });
+
+  // Trivia Throwdown: buzz-in race. First arrival wins - simplest fair "server
+  // timestamp comparison" for a room full of independently-clocked phones, since
+  // trusting each phone's own clock would be neither fair nor tamper-proof.
+  socket.on('trivia:buzz', () => {
+    const room = store.getRoom(socket.data.roomCode);
+    if (!room || room.currentGame !== 'trivia' || !room.gameState) return;
+    const gs = room.gameState;
+    if (gs.phase !== 'clue') return;
+    const entity = triviaEntityFor(room, socket.data.playerId);
+    if (!entity || gs.wrongEntities.has(entity) || gs.buzzedBy) return;
+    gs.buzzedBy = entity;
+    gs.phase = 'buzzed';
+    clearGameTimers(room);
+    gs.timers = [];
+    io.to(room.code).emit('trivia:buzzResult', { entity });
+  });
+
+  // Trivia Throwdown: host heard the buzzed-in answer out loud and judges it -
+  // free-text NLP grading isn't reliable enough for open trivia, so (like the
+  // real show) a human makes the call.
+  socket.on('trivia:judge', ({ code, correct }) => {
+    const room = store.getRoom(code);
+    if (!room || room.hostSocketId !== socket.id) return;
+    if (room.currentGame !== 'trivia' || !room.gameState) return;
+    const gs = room.gameState;
+    if (gs.phase !== 'buzzed' || !gs.buzzedBy) return;
+    const entity = gs.buzzedBy;
+    const clue = gs.currentClue;
+
+    if (correct) {
+      const award = clue.isDailyDouble ? clue.wager * 2 : clue.value;
+      gs.scores[entity] = (gs.scores[entity] || 0) + award;
+      gs.activeEntity = entity;
+      resolveTriviaClue(room, { scored: true, entity, correct: true });
+      return;
+    }
+
+    if (clue.isDailyDouble) {
+      // Daily Double is one shot for the selecting entity only - no reopening.
+      gs.scores[entity] = (gs.scores[entity] || 0) - clue.wager;
+      resolveTriviaClue(room, { scored: true, entity, correct: false });
+      return;
+    }
+
+    if (gs.deductWrong) gs.scores[entity] = (gs.scores[entity] || 0) - clue.value;
+    gs.wrongEntities.add(entity);
+    gs.buzzedBy = null;
+    const stillEligible = gs.entities.some((e) => !gs.wrongEntities.has(e));
+    if (!stillEligible) {
+      resolveTriviaClue(room, { scored: false });
+      return;
+    }
+    gs.phase = 'clue';
+    io.to(room.code).emit('trivia:reopenBuzz', { wrongEntity: entity, scores: gs.scores });
+    gs.timers.push(setTimeout(() => triviaBuzzTimeout(room), TR_BUZZ_WINDOW_MS));
+  });
+
+  // Trivia Throwdown Face-Off: a finalist (or anyone on a finalist team) submits
+  // a free-text guess, matched server-side against that question's answer list.
+  socket.on('trivia:faceoffSubmit', ({ text }) => {
+    const room = store.getRoom(socket.data.roomCode);
+    if (!room || room.currentGame !== 'trivia' || !room.gameState) return;
+    const gs = room.gameState;
+    if (gs.phase !== 'faceoff' || !gs.faceoff) return;
+    const entity = triviaEntityFor(room, socket.data.playerId);
+    if (!entity || !gs.faceoff.finalists.includes(entity)) return;
+    if (gs.faceoff.answers[entity] != null) return;
+    const q = gs.faceoff.questions[gs.faceoff.qIndex];
+    const matched = trivia.MP_matchFaceoffAnswer(q, text);
+    gs.faceoff.answers[entity] = { text: String(text || '').slice(0, 60), points: matched ? matched.points : 0 };
+    io.to(room.hostSocketId).emit('trivia:faceoffAnswered', { entity });
+    if (gs.faceoff.finalists.every((f) => gs.faceoff.answers[f] != null)) {
+      resolveTriviaFaceoffQuestion(room);
     }
   });
 
@@ -487,6 +620,184 @@ function resolveQuickshoot(room, result) {
   gs.resolved = true;
   clearGameTimers(room);
   io.to(room.code).emit('quickshoot:result', result);
+}
+
+// A "scorable entity" is a playerId in Free-for-all mode, or 'A'/'B' in Teams
+// mode - everything from turn order to the scoreboard is keyed on this instead
+// of playerId directly, so the same board/buzz/judge logic works for both modes.
+function triviaEntityFor(room, playerId) {
+  const gs = room.gameState;
+  if (!gs || !playerId) return null;
+  if (gs.mode === 'teams') return gs.teams[playerId] || null;
+  return playerId;
+}
+
+function startTrivia(room, opts) {
+  const gs = room.gameState;
+  const mode = TR_MODES.includes(opts.mode) ? opts.mode : 'ffa';
+  gs.mode = mode;
+  gs.deductWrong = !!opts.deductWrong;
+  gs.phase = 'countdown';
+  gs.timers = [];
+
+  if (mode === 'teams') {
+    const raw = opts.teams || {};
+    const map = {};
+    room.matchPlayers.forEach((id) => { map[id] = raw[id] === 'B' ? 'B' : 'A'; });
+    gs.teams = map;
+    gs.entities = ['A', 'B'];
+  } else {
+    gs.teams = null;
+    gs.entities = room.matchPlayers.slice();
+  }
+  gs.scores = {};
+  gs.entities.forEach((e) => { gs.scores[e] = 0; });
+
+  const board = trivia.MP_generateTriviaBoard(gs.seed);
+  gs.categories = board.categories;
+  gs.dailyDouble = board.dailyDouble; // never sent to clients directly - see trivia:board below
+  gs.cleared = gs.categories.map(() => [false, false, false, false, false]);
+  gs.activeEntity = gs.entities[0];
+  gs.currentClue = null;
+  gs.pendingTile = null;
+  gs.wrongEntities = new Set();
+  gs.buzzedBy = null;
+  gs.wagerEntity = null;
+  gs.faceoff = null;
+
+  gs.timers.push(
+    setTimeout(() => {
+      gs.phase = 'board';
+      io.to(room.code).emit('trivia:board', {
+        categories: gs.categories.map((c) => ({ name: c.name, values: c.clues.map((cl) => cl.value) })),
+        cleared: gs.cleared,
+        scores: gs.scores,
+        activeEntity: gs.activeEntity,
+        mode: gs.mode,
+        teams: gs.teams,
+      });
+    }, TR_COUNTDOWN_MS)
+  );
+}
+
+function triviaOpenClue(room, catIndex, valIndex, wager) {
+  const gs = room.gameState;
+  const clueData = gs.categories[catIndex].clues[valIndex];
+  const isDailyDouble = gs.dailyDouble.cat === catIndex && gs.dailyDouble.val === valIndex;
+  gs.currentClue = { catIndex, valIndex, value: clueData.value, isDailyDouble, wager: isDailyDouble ? wager : 0 };
+  gs.wrongEntities = new Set();
+  gs.buzzedBy = null;
+  gs.phase = 'clue';
+
+  io.to(room.code).emit('trivia:clue', {
+    catIndex, valIndex, text: clueData.clue, value: clueData.value,
+    isDailyDouble, wager: gs.currentClue.wager, entity: gs.activeEntity,
+  });
+
+  if (isDailyDouble) {
+    // Real Daily Double rules: only the selecting entity gets to answer, no buzz race.
+    gs.buzzedBy = gs.activeEntity;
+    gs.phase = 'buzzed';
+    io.to(room.code).emit('trivia:buzzResult', { entity: gs.activeEntity });
+  } else {
+    gs.timers.push(setTimeout(() => triviaBuzzTimeout(room), TR_BUZZ_WINDOW_MS));
+  }
+}
+
+function triviaSubmitWager(room, entity, amount) {
+  const gs = room.gameState;
+  if (gs.phase !== 'wager' || gs.wagerEntity !== entity) return;
+  clearGameTimers(room);
+  gs.timers = [];
+  const max = Math.max(0, gs.scores[entity] || 0);
+  const wager = Math.max(0, Math.min(max, Math.round(Number(amount)) || 0));
+  const { catIndex, valIndex } = gs.pendingTile;
+  triviaOpenClue(room, catIndex, valIndex, wager);
+}
+
+function triviaBuzzTimeout(room) {
+  const gs = room.gameState;
+  if (gs.phase !== 'clue') return; // already buzzed or otherwise resolved
+  resolveTriviaClue(room, { scored: false });
+}
+
+function resolveTriviaClue(room, result) {
+  const gs = room.gameState;
+  clearGameTimers(room);
+  gs.timers = [];
+  const { catIndex, valIndex } = gs.pendingTile;
+  gs.cleared[catIndex][valIndex] = true;
+  const answer = gs.categories[catIndex].clues[valIndex].answer;
+  gs.currentClue = null;
+  gs.buzzedBy = null;
+  gs.wagerEntity = null;
+  const boardDone = gs.cleared.every((row) => row.every(Boolean));
+
+  io.to(room.code).emit('trivia:clueResolved', {
+    catIndex, valIndex, scored: result.scored, entity: result.entity || null,
+    correct: result.correct || false, answer, scores: gs.scores, boardDone,
+  });
+
+  if (boardDone) {
+    gs.phase = 'boardDone';
+    gs.timers.push(setTimeout(() => startTriviaFaceoff(room), TR_BOARD_TO_FACEOFF_DELAY));
+  } else {
+    gs.phase = 'board';
+    io.to(room.code).emit('trivia:turn', { entity: gs.activeEntity });
+  }
+}
+
+function startTriviaFaceoff(room) {
+  const gs = room.gameState;
+  const ranked = gs.entities.slice().sort((a, b) => (gs.scores[b] || 0) - (gs.scores[a] || 0));
+  const finalists = ranked.slice(0, 2);
+  gs.faceoff = { finalists, questions: trivia.MP_generateTriviaFaceoff(gs.seed), qIndex: 0, answers: {} };
+  gs.phase = 'faceoff-countdown';
+  gs.timers = [];
+  io.to(room.code).emit('trivia:faceoffStart', { finalists, scores: gs.scores });
+  gs.timers.push(setTimeout(() => openTriviaFaceoffQuestion(room), TR_FACEOFF_COUNTDOWN_MS));
+}
+
+function openTriviaFaceoffQuestion(room) {
+  const gs = room.gameState;
+  const fo = gs.faceoff;
+  if (fo.qIndex >= fo.questions.length) {
+    finishTrivia(room);
+    return;
+  }
+  const q = fo.questions[fo.qIndex];
+  fo.answers = {};
+  gs.phase = 'faceoff';
+  io.to(room.code).emit('trivia:faceoffQuestion', {
+    index: fo.qIndex, total: fo.questions.length, prompt: q.prompt, finalists: fo.finalists,
+  });
+  gs.timers.push(setTimeout(() => resolveTriviaFaceoffQuestion(room), TR_FACEOFF_ANSWER_MS));
+}
+
+function resolveTriviaFaceoffQuestion(room) {
+  const gs = room.gameState;
+  if (gs.phase !== 'faceoff') return;
+  clearGameTimers(room);
+  gs.timers = [];
+  const fo = gs.faceoff;
+  fo.finalists.forEach((e) => {
+    const a = fo.answers[e];
+    if (a && a.points) gs.scores[e] = (gs.scores[e] || 0) + a.points;
+  });
+  io.to(room.code).emit('trivia:faceoffResult', { index: fo.qIndex, answers: fo.answers, scores: gs.scores });
+  fo.qIndex++;
+  gs.timers.push(setTimeout(() => openTriviaFaceoffQuestion(room), TR_FACEOFF_REVEAL_MS));
+}
+
+function finishTrivia(room) {
+  const gs = room.gameState;
+  gs.phase = 'done';
+  gs.resolved = true;
+  clearGameTimers(room);
+  const ranked = gs.entities.slice().sort((a, b) => (gs.scores[b] || 0) - (gs.scores[a] || 0));
+  const topScore = gs.scores[ranked[0]] || 0;
+  const tie = ranked.length > 1 && (gs.scores[ranked[1]] || 0) === topScore;
+  io.to(room.code).emit('trivia:matchResult', { winner: tie ? null : ranked[0], scores: gs.scores, tie });
 }
 
 server.listen(PORT, () => {
