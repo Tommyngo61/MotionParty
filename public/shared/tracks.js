@@ -16,8 +16,11 @@
     easy: { width: 0.50, widthStep: 0.030, speed: 0.40, speedStep: 0.025, amp: 0.16, ampStep: 0.03, obstacleCount: 0 },
     medium: { width: 0.40, widthStep: 0.045, speed: 0.48, speedStep: 0.035, amp: 0.22, ampStep: 0.045, obstacleCount: 1 },
     hard: { width: 0.32, widthStep: 0.045, speed: 0.55, speedStep: 0.045, amp: 0.28, ampStep: 0.055, obstacleCount: 2 },
-    impossible: { width: 0.25, widthStep: 0.040, speed: 0.62, speedStep: 0.05, amp: 0.32, ampStep: 0.06, obstacleCount: 3 },
+    impossible: { width: 0.25, widthStep: 0.040, speed: 0.62, speedStep: 0.05, amp: 0.32, ampStep: 0.06, obstacleCount: 2 },
   };
+  // However narrow the track gets, an obstacle only ever eats up to this fraction
+  // of it - the rest always stays open as a passable gap next to it.
+  const OBSTACLE_MAX_FRAC = 0.42;
   const DIFFICULTIES = Object.keys(TIERS);
 
   // Width is *narrowed* by widthStep going into each later track, so higher-index
@@ -42,9 +45,10 @@
       for (let o = 0; o < obstacleCount; o++) {
         // Spread obstacles across the middle of the track (never right at the
         // start or the finish/lap-close), each hugging one side so a gap of at
-        // least half the track width always remains open on the other side.
+        // least (1 - OBSTACLE_MAX_FRAC) of the track width always remains open
+        // on the other side, however narrow the track itself has gotten.
         const at = (0.18 + (o + rand() * 0.7) / obstacleCount * 0.7) % 1;
-        const obsWidth = Math.min(width * 0.62, 0.09 + rand() * 0.1);
+        const obsWidth = Math.min(width * OBSTACLE_MAX_FRAC, 0.05 + rand() * 0.04);
         const side = rand() < 0.5 ? -1 : 1;
         const x = side * (width / 2 - obsWidth / 2 - 0.015);
         obstacles.push({ at, span: 0.05 + rand() * 0.025, x, width: obsWidth });

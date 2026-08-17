@@ -34,7 +34,12 @@
   const BALL_R = 0.16;  // ball radius, in maze cell-units
   const WALL_HALF = 0.06; // wall half-thickness, in maze cell-units
   const FINISH_R = 0.32; // capture radius around the finish hole, in cell-units
-  const HAZARD_R = 0.3;  // capture radius around a hazard hole, in cell-units
+  // Capture radius around a hazard hole, in cell-units. A 1-wide corridor only
+  // gives the ball's center about ±0.28 of safe travel off the centerline (walls
+  // eat BALL_R+WALL_HALF off each side) - keeping this well under that, unlike
+  // FINISH_R, is what makes a hazard actually dodgeable by hugging the far wall
+  // instead of an unavoidable roadblock.
+  const HAZARD_R = 0.16;
   const HAZARD_PAUSE_MS = 800; // how long the ball sits "fallen" before respawning at the maze start
   const PROGRESS_RELAY_MS = 180;
 

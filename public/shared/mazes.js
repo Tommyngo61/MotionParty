@@ -85,7 +85,7 @@
     easy: { sizes: [4, 6], hazards: 0 },
     medium: { sizes: [5, 8], hazards: 1 },
     hard: { sizes: [7, 10], hazards: 2 },
-    impossible: { sizes: [9, 13], hazards: 3 },
+    impossible: { sizes: [9, 13], hazards: 2 },
   };
   const NAMES = ['Easy Maze', 'Hard Maze'];
 
