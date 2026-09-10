@@ -1,0 +1,152 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+# One module, one checkout, no cross-repo token. Jobs are split by what they
+# need — the integration job wants a database, the package job wants dpkg-deb —
+# not by which component they cover.
+
+env:
+  GO_VERSION: "1.23"
+
+jobs:
+  unit:
+    name: Lint and unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Verify formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Verify go.mod is tidy
+        run: |
+          go mod tidy
+          git diff --exit-code go.mod go.sum
+
+      # The runner has no NVIDIA driver, so the agent's GPU collector exercises
+      # its real degraded path here rather than only a stub — the same path a
+      # node takes during a driver upgrade.
+      - name: Tests
+        run: go test -race ./...
+
+      - name: Build
+        run: go build ./...
+
+  bandwidth:
+    name: Bandwidth budget
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+      # -v so the byte accounting lands in the job log. If a schema change
+      # pushes a node's projected monthly traffic up, that is a number a
+      # reviewer should see, not a test that quietly still passes.
+      - name: Projected monthly traffic per node
+        run: go test -race -v -run 'TestMonthlyBudget|TestHeartbeatFitsBudget' ./proto/
+
+  integration:
+    name: Controller integration tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Must match console/deploy/docker-compose.yml: the migrations create
+        # hypertables and continuous aggregates directly, so plain Postgres will
+        # not do.
+        image: timescale/timescaledb:2.17.2-pg16
+        env:
+          POSTGRES_USER: meternode
+          POSTGRES_PASSWORD: meternode
+          POSTGRES_DB: meternode
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U meternode -d meternode"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Migrate
+        env:
+          METERNODE_DATABASE_URL: postgres://meternode:meternode@localhost:5432/meternode?sslmode=disable
+        run: go run ./console/cmd/controller migrate
+
+      - name: Integration tests
+        env:
+          METERNODE_TEST_DATABASE_URL: postgres://meternode:meternode@localhost:5432/meternode?sslmode=disable
+        run: go test -tags integration -race -count=1 ./console/internal/store/
+
+  package:
+    name: Agent .deb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Lint the build script
+        run: bash -n agent/packaging/deb/build.sh
+
+      - name: Build
+        working-directory: agent
+        run: ./packaging/deb/build.sh
+
+      - name: Assert the agent binary is static
+        run: |
+          # A dynamically linked agent would be at the mercy of whatever libc
+          # the node's image happens to carry, on a machine we cannot reach.
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath -o /tmp/agent ./agent/cmd/agent
+          file /tmp/agent
+          if file /tmp/agent | grep -q "dynamically linked"; then
+            echo "the agent must be statically linked"; exit 1
+          fi
+
+      - name: Inspect the package
+        run: |
+          dpkg-deb -I agent/dist/*.deb
+          dpkg-deb -c agent/dist/*.deb
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meternode-agent-deb
+          path: agent/dist/*.deb
+          if-no-files-found: error
+
+  unit-file:
+    name: Validate the systemd unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: systemd-analyze verify
+        run: |
+          # Catches typos in directive names, which otherwise fail silently at
+          # install time on a node nobody can log into.
+          sudo cp agent/packaging/systemd/meternode-agent.service /lib/systemd/system/
+          systemd-analyze verify meternode-agent.service 2>&1 | tee /tmp/verify.log
+          # An unknown-directive warning is a real problem; a missing-executable
+          # one is expected, since the binary is not installed here.
+          if grep -Ei "unknown lvalue|unknown key|invalid" /tmp/verify.log; then
+            echo "the unit file has an invalid directive"; exit 1
+          fi
+      - name: Report the hardening score
+        run: systemd-analyze security meternode-agent.service || true
