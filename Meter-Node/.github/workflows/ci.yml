@@ -60,6 +60,40 @@ jobs:
       - name: Projected monthly traffic per node
         run: go test -race -v -run 'TestMonthlyBudget|TestHeartbeatFitsBudget' ./proto/
 
+  web:
+    name: Operator UI
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: console/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: console/web/package-lock.json
+
+      - run: npm ci
+
+      - name: Type-check
+        run: npm run lint
+
+      - name: Build
+        run: npm run build
+
+      # The reserved-colour rule is the one design constraint worth enforcing
+      # mechanically: green, amber and red mean node state and nothing else,
+      # so feature code may not reach for a raw colour literal. The tokens
+      # live in index.css; everything else uses the semantic aliases.
+      - name: No raw colour literals outside the token layer
+        run: |
+          if grep -rnE '#[0-9a-fA-F]{3,8}\b|rgba?\(' src --include='*.tsx' --include='*.ts'; then
+            echo "Raw colour literals found. Use the --color-* / --status-* tokens from index.css."
+            exit 1
+          fi
+          echo "clean"
+
   integration:
     name: Controller integration tests
     runs-on: ubuntu-latest

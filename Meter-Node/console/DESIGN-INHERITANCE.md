@@ -1,10 +1,64 @@
 # Design inheritance from the RMS portal
 
-> **Status: BLOCKED. Neither Case A nor Case B has been determined, because
-> `rms-frontend-portal` could not be read.**
+> **Status: UNBLOCKED BY DIRECTION, NOT BY EXTRACTION.**
 >
-> Section 3 of the brief says plainly: *"If it is not present on disk, stop and
-> tell me rather than inventing a design system."* This document is that stop.
+> `rms-frontend-portal` still could not be read (see below). The UI was built
+> anyway, because the owner supplied the direction directly: a screenshot of
+> the live RMS device page, a reference design for the intended look
+> (glassmorphism, warm ground, soft radii), and an explicit instruction to
+> build on that rather than wait.
+>
+> That is a legitimate unblock, and it is a *different* one from what this
+> document originally called for. What follows records both what was inherited
+> from the screenshot and what is still owed if true parity with RMS matters.
+
+## What was inherited, and from where
+
+**From the RMS screenshot** — patterns an installer already recognises:
+
+| Pattern | Where it landed |
+| --- | --- |
+| White cards, hairline border, minimal shadow | `.glass` panels and `Card` |
+| Pill status chips, light tint + saturated text | `StatusChip` |
+| Grey-label / dark-value rows with hairline dividers | `Row` |
+| Solid blue primary button with a leading icon | Command console button |
+| Narrow left icon rail | `Shell` |
+| Section headers in small caps | `Card` titles |
+| Green reserved for "OKAY" / "No Errors" | Extended into the status-colour rule |
+
+**From the reference design** — surface treatment:
+warm cream ground rather than cold grey, generous radii (12/16/24px),
+translucent panels with backdrop blur, floating rail, soft layered shadows,
+stat cards with a small label above a large number.
+
+**From the product brief** — the rules that survived both, and matter most:
+green/amber/red reserved exclusively for node state; every number monospace
+with tabular figures; density sufficient for 200 nodes on one 1440px screen;
+motion only when data actually changes.
+
+## What is still owed
+
+This was built from a *picture* of RMS, not its source. If genuine parity
+matters, these are the things a screenshot cannot supply:
+
+- `components.json` — the shadcn style variant, base colour, and icon library.
+  Console's should match it field for field; right now it has no shadcn config
+  at all.
+- The real `@theme` block. Console's sand scale was derived to *look* right
+  next to the screenshot, not sampled from RMS's tokens. Exact hex parity is
+  unverified.
+- `tsconfig.json`, `vite.config.ts`, `eslint.config.*`, `.prettierrc` — the
+  brief says copy these verbatim. Console's were written from scratch, so
+  they will drift.
+- The `src/components/ui/**` primitive inventory, and which primitives have
+  been customised away from stock shadcn.
+- Font loading. Console loads Inter + JetBrains Mono from Google Fonts; RMS's
+  actual typeface and weights are unconfirmed.
+- Whether RMS uses colour decoratively. If it does, Console's reserved-colour
+  rule is a real **divergence** to decide on rather than an extension.
+
+None of that blocks the UI shipping. All of it is cheap to reconcile once the
+repository is readable — the token layer is one file, `src/index.css`.
 
 ## What was attempted
 
@@ -24,14 +78,13 @@ Step 1 depends on could not happen here.
 
 ## What that does and does not block
 
-**Not blocked — everything delivered so far.** Console M0 and M1 are backend:
-migrations, enrollment, credential issuance, hardware fingerprint binding, the
-health endpoint, CI, and the compose stack. None of it touches the design
+**Not blocked — the backend.** Console M0 and M1 never touched the design
 system.
 
-**Blocked — M3 and every screen after it.** The fleet grid, node detail, alerts
-view, agent release view, and audit log view all depend on tokens, primitives,
-and conventions that must be *read* from RMS, not guessed at.
+**No longer blocked — the UI.** The fleet grid, node detail and alerts views
+are built (`console/web/`), on tokens derived from the supplied references
+rather than extracted from RMS. The agent release and audit log views are
+placeholders because their backing services are M5, not because of design.
 
 ## What is needed to unblock
 

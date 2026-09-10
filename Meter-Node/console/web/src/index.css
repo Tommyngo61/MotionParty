@@ -1,0 +1,222 @@
+@import "tailwindcss";
+
+/* ===========================================================================
+   MeterNode Console — design tokens
+
+   Two references shaped this. The RMS portal supplies the patterns an
+   installer already recognises: white cards with hairline borders, pill status
+   chips, grey-label / dark-value rows, a solid blue primary button, a narrow
+   left icon rail. The Velora dashboard supplies the surface treatment asked
+   for: a warm cream ground rather than a cold grey one, generous radii, soft
+   shadows, and translucent panels over it.
+
+   Two rules from the product brief survive that synthesis unchanged, and they
+   are the ones to defend in review:
+
+   1. GREEN, AMBER AND RED ARE RESERVED FOR NODE STATE. Nothing else in the
+      product may use those hues — not a chart series, not a brand accent, not
+      an icon. A healthy fleet therefore renders almost colourless, and colour
+      anywhere in the periphery reliably means something needs attention. Use
+      the --status-* aliases; never reach for a raw scale step in feature code.
+
+   2. EVERY NUMBER IS MONOSPACE WITH TABULAR FIGURES. Proportional digits
+      jitter as live values update and make the whole app feel unstable.
+      =========================================================================== */
+
+@theme {
+  /* --- Warm neutral scale -------------------------------------------------
+     Sand, not slate. The nodes live in houses; the tool should read
+     home-adjacent rather than datacenter-cold, and it separates Console from
+     every other piece of infrastructure tooling. Twelve steps, Radix-shaped:
+     1-2 app backgrounds, 3-5 component backgrounds and hover, 6-8 borders,
+     9-10 solid fills, 11-12 text. */
+  --color-sand-1: #fdfcfb;
+  --color-sand-2: #faf7f2;
+  --color-sand-3: #f4efe6;
+  --color-sand-4: #ede6da;
+  --color-sand-5: #e5dccd;
+  --color-sand-6: #dbd0be;
+  --color-sand-7: #cbbda6;
+  --color-sand-8: #b3a186;
+  --color-sand-9: #8c7a5f;
+  --color-sand-10: #7d6c53;
+  --color-sand-11: #6b5c47;
+  --color-sand-12: #2e2823;
+
+  /* --- Status. Reserved. ------------------------------------------------- */
+  --color-status-online: #3f9142;
+  --color-status-online-bg: #e8f3e6;
+  --color-status-derated: #c07d1a;
+  --color-status-derated-bg: #fbf0dc;
+  --color-status-offline: #8a8580;
+  --color-status-offline-bg: #eeebe6;
+  --color-status-fault: #c0392b;
+  --color-status-fault-bg: #fbe9e6;
+
+  /* --- Accent -------------------------------------------------------------
+     Blue, inherited from RMS's primary button. Deliberately NOT green: the
+     reserved-colour rule means the only affirmative colour in the product is
+     a node being healthy. */
+  --color-accent-9: #2563eb;
+  --color-accent-10: #1d4fd7;
+  --color-accent-3: #e8eefc;
+  --color-accent-11: #1e40af;
+
+  /* --- Chart series -------------------------------------------------------
+     Never green/amber/red. These read as data, not as judgement. */
+  --color-series-1: #2563eb;
+  --color-series-2: #7c5cbf;
+  --color-series-3: #0e7c86;
+  --color-series-4: #a0562a;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* Denser than RMS. RMS shows one system at a time and can afford comfort
+     spacing; this shows two hundred at once. */
+  --text-2xs: 0.6875rem;
+  --text-xs: 0.75rem;
+  --text-sm: 0.8125rem;
+  --text-base: 0.875rem;
+
+  --radius-tile: 0.75rem;
+  --radius-card: 1rem;
+  --radius-shell: 1.5rem;
+
+  --shadow-glass: 0 1px 2px rgb(46 40 35 / 0.04), 0 8px 24px -8px rgb(46 40 35 / 0.10);
+  --shadow-lift: 0 2px 4px rgb(46 40 35 / 0.06), 0 16px 32px -12px rgb(46 40 35 / 0.16);
+}
+
+/* --- Semantic aliases -----------------------------------------------------
+   Feature code reads these, never the scale directly. Swapping the palette or
+   the theme then touches one file. */
+:root {
+  --app-bg: var(--color-sand-2);
+  --app-bg-far: var(--color-sand-4);
+  --panel: rgb(255 255 255 / 0.72);
+  --panel-solid: #ffffff;
+  --panel-border: rgb(219 208 190 / 0.7);
+  --hairline: var(--color-sand-6);
+  --text-hi: var(--color-sand-12);
+  --text-mid: var(--color-sand-11);
+  --text-lo: var(--color-sand-9);
+  --blur-panel: 16px;
+  color-scheme: light;
+}
+
+/* Dark is a toggle, not the default, and it is a class on the root rather
+   than a second set of hand-picked hex values. */
+:root[data-theme="dark"] {
+  --color-sand-1: #17150f;
+  --color-sand-2: #1d1a14;
+  --color-sand-3: #262218;
+  --color-sand-4: #2f2a1f;
+  --color-sand-5: #3a3427;
+  --color-sand-6: #4a4232;
+  --color-sand-7: #635846;
+  --color-sand-8: #85775f;
+  --color-sand-9: #a2937a;
+  --color-sand-10: #b5a68d;
+  --color-sand-11: #cabca4;
+  --color-sand-12: #f2ece1;
+
+  --color-status-online: #5cb85f;
+  --color-status-online-bg: rgb(92 184 95 / 0.14);
+  --color-status-derated: #e0a13a;
+  --color-status-derated-bg: rgb(224 161 58 / 0.14);
+  --color-status-offline: #8a8078;
+  --color-status-offline-bg: rgb(138 128 120 / 0.16);
+  --color-status-fault: #e06256;
+  --color-status-fault-bg: rgb(224 98 86 / 0.14);
+
+  --color-accent-9: #5b8dee;
+  --color-accent-10: #7aa3f2;
+  --color-accent-3: rgb(91 141 238 / 0.16);
+  --color-accent-11: #a9c4f7;
+
+  --color-series-1: #5b8dee;
+  --color-series-2: #a98cdd;
+  --color-series-3: #4bb3ba;
+  --color-series-4: #cd8a5e;
+
+  --app-bg: var(--color-sand-2);
+  --app-bg-far: var(--color-sand-1);
+  --panel: rgb(47 42 31 / 0.55);
+  --panel-solid: var(--color-sand-3);
+  --panel-border: rgb(74 66 50 / 0.8);
+  --hairline: var(--color-sand-6);
+  color-scheme: dark;
+}
+
+@layer base {
+  * { border-color: var(--hairline); }
+
+  body {
+    margin: 0;
+    background: var(--app-bg);
+    color: var(--text-hi);
+    font-family: var(--font-sans);
+    font-size: var(--text-base);
+    -webkit-font-smoothing: antialiased;
+    /* The warm wash the Velora reference gets from its background photograph,
+       done with gradients so it costs nothing and survives both themes. */
+    background-image:
+      radial-gradient(ellipse 80% 60% at 12% -8%, var(--color-sand-3) 0%, transparent 60%),
+      radial-gradient(ellipse 70% 50% at 92% 4%, var(--color-accent-3) 0%, transparent 55%),
+      radial-gradient(ellipse 100% 80% at 50% 110%, var(--app-bg-far) 0%, transparent 70%);
+    background-attachment: fixed;
+  }
+
+  /* Non-negotiable: every number in the product. */
+  .tnum {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+    letter-spacing: -0.01em;
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--color-accent-9);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--color-sand-6);
+    border-radius: 999px;
+    border: 3px solid transparent;
+    background-clip: content-box;
+  }
+}
+
+@layer components {
+  /* The glass treatment from the reference. One class, so the blur radius and
+     border are tuned in a single place rather than drifting per screen. */
+  .glass {
+    background: var(--panel);
+    backdrop-filter: blur(var(--blur-panel)) saturate(1.4);
+    -webkit-backdrop-filter: blur(var(--blur-panel)) saturate(1.4);
+    border: 1px solid var(--panel-border);
+  }
+}
+
+/* Motion: the only movement in the application is data actually changing, so
+   movement in peripheral vision reliably means something happened. Values
+   crossfade; they never count up. Charts do not animate on mount. */
+@keyframes crossfade { from { opacity: 0.35; } to { opacity: 1; } }
+.animate-crossfade { animation: crossfade 240ms ease-out; }
+
+/* The single exception: one brief pulse on a tile that changes state. */
+@keyframes state-pulse {
+  0%   { box-shadow: 0 0 0 0 var(--pulse-color, transparent); }
+  70%  { box-shadow: 0 0 0 6px transparent; }
+  100% { box-shadow: 0 0 0 0 transparent; }
+}
+.animate-state-pulse { animation: state-pulse 900ms ease-out; }
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-crossfade, .animate-state-pulse { animation: none; }
+  * { transition-duration: 0.01ms !important; }
+}

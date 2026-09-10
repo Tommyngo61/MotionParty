@@ -76,6 +76,24 @@ migrate-down: ## Roll back one migration
 psql: ## Open a psql shell on the dev database
 	$(DC) exec postgres psql -U meternode -d meternode
 
+## --- web -----------------------------------------------------------------
+
+.PHONY: web-install
+web-install: ## Install the operator UI's dependencies
+	cd web && npm install
+
+.PHONY: web
+web: ## Run the operator UI against a local controller (localhost:5173)
+	cd web && npm run dev
+
+.PHONY: web-build
+web-build: ## Type-check and build the operator UI
+	cd web && npm run build
+
+.PHONY: web-lint
+web-lint: ## Type-check the operator UI
+	cd web && npm run lint
+
 ## --- dev stack -----------------------------------------------------------
 
 .PHONY: dev

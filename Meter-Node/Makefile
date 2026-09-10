@@ -51,6 +51,10 @@ dev: ## Bring up the control plane (Postgres/Timescale + Redis + controller)
 simulate: ## Point simulated nodes at the running control plane
 	$(MAKE) -C console simulate
 
+.PHONY: web
+web: ## Run the operator UI (needs `make -C console web-install` once)
+	$(MAKE) -C console web
+
 .PHONY: agent
 agent: ## Run the agent locally against a scratch config
 	$(MAKE) -C agent run
