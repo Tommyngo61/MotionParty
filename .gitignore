@@ -1,3 +1,9 @@
 node_modules/
 npm-debug.log*
 .DS_Store
+
+# MeterNode build output
+meternode/*/bin/
+meternode/*/dist/
+meternode/*/dev/
+meternode/*/coverage.out

@@ -1,0 +1,69 @@
+# MeterNode Agent configuration.
+#
+# Every value here has a working default — an agent with no config file at all
+# will start, sample, and answer `meternodectl status`. That matters: a node
+# that boots before anyone has configured it must still be diagnosable.
+#
+# Environment variables override this file (METERNODE_CONTROLLER_URL,
+# METERNODE_SAMPLE_INTERVAL, and so on) for the imaging pipeline.
+#
+# Reload after editing:  systemctl reload meternode-agent
+# Validate before that:  meternode-agent -check-config
+
+controller:
+  # Must be https unless it is localhost.
+  url: "https://control.example.com"
+
+  # Read once at enrollment, then deleted. The imaging pipeline writes it, or
+  # a field tech types it in.
+  enroll_token_file: /etc/meternode/enroll.token
+
+  # Exponential backoff with full jitter. Never a tight retry loop: a fleet
+  # whose ISP recovered together must not return as a thundering herd.
+  reconnect_min: 1s
+  reconnect_max: 300s
+
+collect:
+  # The shared contract's budget. Raising the rates here will breach it, and
+  # the agent refuses values that obviously would.
+  sample_interval: 10s
+  flush_interval: 60s
+  heartbeat_interval: 15s
+
+  # Must be shorter than sample_interval. This is what keeps a hung SMART read
+  # or a wedged NVML call from stalling the agent.
+  collector_timeout: 3s
+
+  # Empty means every real filesystem (tmpfs, overlay and friends excluded).
+  disk_mounts: []
+
+  # Empty means the interface carrying the default route — the one the
+  # homeowner's ISP meters.
+  net_interface: ""
+
+bandwidth:
+  # Target 150 MB. The 500 MB hard ceiling is not configurable.
+  monthly_budget_mb: 150
+  # Degrade telemetry resolution at 75% rather than 99%: degrading at the wire
+  # makes the last day of every month a telemetry blackout.
+  degrade_at: 0.75
+  # The day the homeowner's ISP resets their cap. Residential caps reset on a
+  # billing date, not on the 1st.
+  billing_cycle_day: 1
+
+paths:
+  state_dir: /var/lib/meternode
+  # A unix socket. There is no configuration in this codebase that opens a
+  # listening TCP port on a node.
+  socket_path: /run/meternode/agent.sock
+
+runtime:
+  docker_socket: /var/run/docker.sock
+  workload_network: meternode-workloads
+  # There is no supported way to run workloads with this off. The homeowner's
+  # LAN is the thing being protected.
+  enforce_isolation: true
+
+log:
+  level: info
+  format: json

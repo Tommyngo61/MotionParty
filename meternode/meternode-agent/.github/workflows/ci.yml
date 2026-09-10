@@ -1,0 +1,109 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+env:
+  GO_VERSION: "1.23"
+
+jobs:
+  build:
+    name: Lint, test, cross-compile
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: meternode-agent
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: meternode-agent/go.sum
+
+      - name: Verify formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "These files need gofmt:"; echo "$unformatted"; exit 1
+          fi
+
+      - name: Vet
+        run: go vet ./...
+
+      # The runner has no NVIDIA driver, so the GPU collector's degraded path is
+      # exercised for real here rather than only against a stub. That is the
+      # same path a node takes during a driver upgrade.
+      - name: Unit tests
+        run: go test -race ./...
+
+      - name: Cross-compile (linux/amd64, static)
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+            -o /tmp/meternode-agent ./cmd/agent
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -trimpath \
+            -o /tmp/meternodectl ./cmd/agentctl
+          file /tmp/meternode-agent
+
+      - name: Assert the binary is static
+        run: |
+          # A dynamically linked agent would be at the mercy of whatever libc
+          # the node's image happens to carry, on a machine we cannot reach.
+          if file /tmp/meternode-agent | grep -q "dynamically linked"; then
+            echo "the agent must be statically linked"; exit 1
+          fi
+
+  package:
+    name: Build the .deb
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: meternode-agent
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: meternode-agent/go.sum
+
+      - name: Build
+        run: ./packaging/deb/build.sh
+
+      - name: Inspect the package
+        run: |
+          dpkg-deb -I dist/*.deb
+          dpkg-deb -c dist/*.deb
+
+      - name: Lint the maintainer scripts
+        run: |
+          for f in packaging/deb/build.sh; do bash -n "$f"; done
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meternode-agent-deb
+          path: meternode-agent/dist/*.deb
+          if-no-files-found: error
+
+  unit-file:
+    name: Validate the systemd unit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: systemd-analyze verify
+        run: |
+          # Catches typos in directive names, which otherwise fail silently at
+          # install time on a node nobody can log into.
+          sudo cp meternode-agent/packaging/systemd/meternode-agent.service \
+                  /lib/systemd/system/
+          systemd-analyze verify meternode-agent.service 2>&1 | tee /tmp/verify.log
+          # An unknown-directive warning is a real problem; a missing-executable
+          # one is expected, since the binary is not installed here.
+          if grep -Ei "unknown lvalue|unknown key|invalid" /tmp/verify.log; then
+            echo "the unit file has an invalid directive"; exit 1
+          fi
+
+      - name: Report the hardening score
+        run: systemd-analyze security meternode-agent.service || true
