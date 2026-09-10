@@ -148,6 +148,55 @@
   color-scheme: dark;
 }
 
+/* The viewer has THREE states, not two: an explicit choice stamps
+   data-theme, and the default "system" setting stamps nothing at all. Without
+   this block a viewer whose OS is dark but who has made no explicit choice
+   gets light tokens on a dark ground — the classic unreadable-page bug. The
+   guard makes an explicit light choice beat a dark OS. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+  --color-sand-1: #17150f;
+  --color-sand-2: #1d1a14;
+  --color-sand-3: #262218;
+  --color-sand-4: #2f2a1f;
+  --color-sand-5: #3a3427;
+  --color-sand-6: #4a4232;
+  --color-sand-7: #635846;
+  --color-sand-8: #85775f;
+  --color-sand-9: #a2937a;
+  --color-sand-10: #b5a68d;
+  --color-sand-11: #cabca4;
+  --color-sand-12: #f2ece1;
+
+  --color-status-online: #5cb85f;
+  --color-status-online-bg: rgb(92 184 95 / 0.14);
+  --color-status-derated: #e0a13a;
+  --color-status-derated-bg: rgb(224 161 58 / 0.14);
+  --color-status-offline: #8a8078;
+  --color-status-offline-bg: rgb(138 128 120 / 0.16);
+  --color-status-fault: #e06256;
+  --color-status-fault-bg: rgb(224 98 86 / 0.14);
+
+  --color-accent-9: #5b8dee;
+  --color-accent-10: #7aa3f2;
+  --color-accent-3: rgb(91 141 238 / 0.16);
+  --color-accent-11: #a9c4f7;
+
+  --color-series-1: #5b8dee;
+  --color-series-2: #a98cdd;
+  --color-series-3: #4bb3ba;
+  --color-series-4: #cd8a5e;
+
+  --app-bg: var(--color-sand-2);
+  --app-bg-far: var(--color-sand-1);
+  --panel: rgb(47 42 31 / 0.55);
+  --panel-solid: var(--color-sand-3);
+  --panel-border: rgb(74 66 50 / 0.8);
+  --hairline: var(--color-sand-6);
+  color-scheme: dark;
+  }
+}
+
 @layer base {
   * { border-color: var(--hairline); }
 
