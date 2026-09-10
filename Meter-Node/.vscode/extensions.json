@@ -1,0 +1,10 @@
+{
+  // Suggested on first open. Nothing here is required to build — `make test`
+  // works from any terminal — but the Go extension is what makes the
+  // debugger, test gutters, and cross-package navigation work.
+  "recommendations": [
+    "golang.go",
+    "ms-azuretools.vscode-docker",
+    "redhat.vscode-yaml"
+  ]
+}

@@ -1,0 +1,91 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "test: everything",
+      "detail": "Every unit test in the repo — controller, agent, and the shared schema.",
+      "type": "shell",
+      "command": "make test",
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": "$go",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "ci: lint + test + build",
+      "detail": "What CI runs that needs no database. Green here means green there.",
+      "type": "shell",
+      "command": "make ci",
+      "group": "build",
+      "problemMatcher": "$go",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "bandwidth budget",
+      "detail": "Print the projected control-plane traffic per node against the 150 MB target.",
+      "type": "shell",
+      "command": "make budget",
+      "problemMatcher": "$go",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "dev: bring up the control plane",
+      "detail": "Postgres/TimescaleDB + Redis + the controller, via docker compose.",
+      "type": "shell",
+      "command": "make dev",
+      "isBackground": true,
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "dev: stop the control plane",
+      "type": "shell",
+      "command": "make -C console dev-down",
+      "problemMatcher": []
+    },
+    {
+      "label": "dev: simulate 25 nodes",
+      "detail": "Enrol simulated nodes against the running controller.",
+      "type": "shell",
+      "command": "make simulate",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "test: controller integration (needs the dev database)",
+      "detail": "Transaction atomicity, unique constraints, row locking. Run `dev` first.",
+      "type": "shell",
+      "command": "make -C console test-integration",
+      "group": "test",
+      "problemMatcher": "$go",
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "agent: write the scratch config",
+      "detail": "Creates agent/dev/agent.yaml so the agent can run without root.",
+      "type": "shell",
+      "command": "make -C agent dev-config",
+      "problemMatcher": []
+    },
+    {
+      "label": "agent: status",
+      "detail": "Ask a locally-running agent what is wrong with it.",
+      "type": "shell",
+      "command": "make -C agent status",
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated", "clear": true }
+    },
+    {
+      "label": "agent: build the .deb",
+      "type": "shell",
+      "command": "make deb",
+      "group": "build",
+      "problemMatcher": []
+    },
+    {
+      "label": "migrate: apply to the dev database",
+      "type": "shell",
+      "command": "make -C console migrate",
+      "problemMatcher": []
+    }
+  ]
+}

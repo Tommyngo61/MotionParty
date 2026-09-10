@@ -1,0 +1,57 @@
+{
+  // --- Go -----------------------------------------------------------------
+  // One module at the repository root, so gopls needs no workspace
+  // configuration: proto/, console/ and agent/ are all inside it.
+  "go.useLanguageServer": true,
+  "gopls": {
+    // staticcheck catches the class of mistake that cost us a real bug here:
+    // writes inside a transaction that is about to roll back.
+    "ui.diagnostic.staticcheck": true,
+    "ui.semanticTokens": true
+  },
+
+  "go.lintTool": "staticcheck",
+  "go.formatTool": "gofmt",
+  "go.testFlags": ["-race", "-count=1"],
+  // The agent's tests exercise real sampling loops and a real unix socket, so
+  // a few of them take a couple of seconds. The default 30s is too tight once
+  // -race is on.
+  "go.testTimeout": "120s",
+  "go.coverOnSingleTest": true,
+  "go.buildTags": "",
+
+  // The store integration tests are behind a build tag and need a database.
+  // Uncomment to have gopls analyse them; `make test-integration` runs them.
+  // "go.buildFlags": ["-tags=integration"],
+
+  "[go]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": { "source.organizeImports": "explicit" },
+    "editor.insertSpaces": false,
+    "editor.detectIndentation": false
+  },
+  "[go.mod]": { "editor.formatOnSave": true },
+
+  // --- Files --------------------------------------------------------------
+  "files.trimTrailingWhitespace": true,
+  "files.insertFinalNewline": true,
+  "files.exclude": {
+    "**/bin": true,
+    "**/dist": true,
+    "**/dev": true,
+    "**/coverage.out": true
+  },
+  "search.exclude": {
+    "**/bin": true,
+    "**/dist": true,
+    "go.sum": true
+  },
+
+  // --- SQL ----------------------------------------------------------------
+  // The migrations are goose-flavoured SQL; the `-- +goose` lines are
+  // directives, not comments to be reformatted away.
+  "[sql]": { "editor.formatOnSave": false },
+
+  "[markdown]": { "editor.wordWrap": "on", "editor.rulers": [80] },
+  "editor.rulers": [80]
+}

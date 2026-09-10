@@ -29,6 +29,24 @@ make agent         # run the host agent locally, no root needed
 make budget        # print the projected traffic per node
 ```
 
+## Opening in VS Code
+
+`.vscode/` is committed, so the repo is ready to work in as soon as it is
+cloned. Accept the extension prompt (the Go extension is the one that matters)
+and you get:
+
+- **Run and Debug** — the controller, the simulator (normal and a 200-node
+  bad-network run), the agent, and `meternodectl`, each with the environment a
+  local dev stack needs already set. The agent's config is written by a
+  pre-launch task, so it runs without root and without touching `/etc`.
+- **Tasks** (⇧⌘P → *Run Task*) — every `make` target, including the ones that
+  need the dev database and the one that prints the bandwidth accounting.
+- Tests run with `-race`, a timeout that suits the agent's real sampling loops,
+  and `staticcheck` on.
+
+The `integration`-tagged store tests are excluded from analysis by default;
+`settings.json` says which line to uncomment if you want gopls to see them.
+
 ## Why the design looks the way it does
 
 Every unusual decision here traces back to one of six environmental
