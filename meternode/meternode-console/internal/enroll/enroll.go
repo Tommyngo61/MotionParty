@@ -48,6 +48,14 @@ type ReattestationError struct {
 	BoundHash       string
 	PresentedHash   string
 	ChangedFields   []string
+
+	// recorded is false when this mismatch has only been DETECTED, not yet
+	// persisted. See Enroll for why detection and recording cannot share a
+	// transaction.
+	recorded bool
+	// presented carries what the node showed us, so the recording pass does
+	// not have to re-read it.
+	presented proto.HardwareInventory
 }
 
 func (e *ReattestationError) Error() string {
@@ -347,7 +355,7 @@ func (s *Service) Enroll(ctx context.Context, req *proto.EnrollRequest, remoteAd
 				return &ReattestationError{
 					NodeID: existing.ID, ReattestationID: pending.ID,
 					BoundHash: pending.BoundHash, PresentedHash: pending.PresentedHash,
-					ChangedFields: pending.ChangedFields,
+					ChangedFields: pending.ChangedFields, recorded: true,
 				}
 			}
 
@@ -380,7 +388,7 @@ func (s *Service) Enroll(ctx context.Context, req *proto.EnrollRequest, remoteAd
 			return err
 		}
 		if bound != nil && bound.FingerprintHash != presented {
-			return s.openReattestation(ctx, tx, node, bound, fp, presented, remoteAddr, now)
+			return s.detectReattestation(ctx, tx, node, bound, fp, presented, req.Hardware)
 		}
 
 		// Bind (or re-affirm) the hardware.
@@ -481,6 +489,24 @@ func (s *Service) Enroll(ctx context.Context, req *proto.EnrollRequest, remoteAd
 		return nil
 	})
 	if err != nil {
+		// A detected-but-unrecorded mismatch has to be persisted NOW, in its
+		// own transaction.
+		//
+		// The enrollment transaction above has already rolled back, and it had
+		// to: the token must stay unspent so a field tech can retry once an
+		// operator releases the node. But rolling back also discarded the
+		// re-attestation record, the quarantine, and the CRITICAL event —
+		// which is exactly the evidence a human needs to make that decision.
+		// Recording and refusing are two different jobs and cannot share a
+		// transaction.
+		var re *ReattestationError
+		if errors.As(err, &re) && !re.recorded {
+			if recErr := s.recordReattestation(ctx, re, remoteAddr, now); recErr != nil {
+				// The refusal still stands. A failure to write the audit trail
+				// must not turn into a successful enrollment.
+				return nil, fmt.Errorf("%w (additionally, recording it failed: %v)", err, recErr)
+			}
+		}
 		return nil, err
 	}
 	return &out, nil
@@ -530,24 +556,23 @@ func (s *Service) identify(ctx context.Context, tx Tx, req *proto.EnrollRequest,
 	return tx.NodeByPartialHardware(ctx, req.Fingerprint)
 }
 
-// openReattestation records the mismatch, quarantines the node, and returns a
-// ReattestationError. The node is quarantined rather than merely refused
-// because until a human decides, we do not know whether the machine still
-// reporting under this identity is the one we think it is — and a quarantined
-// node must not start workloads.
-func (s *Service) openReattestation(ctx context.Context, tx Tx, node *model.Node, bound *model.Hardware,
-	fp proto.HardwareFingerprint, presented, remoteAddr string, now time.Time) error {
+// detectReattestation decides that a mismatch has happened. It writes nothing.
+//
+// It runs inside the enrollment transaction, which is about to roll back, so
+// anything written here would be discarded. Persisting is recordReattestation's
+// job.
+func (s *Service) detectReattestation(ctx context.Context, tx Tx, node *model.Node, bound *model.Hardware,
+	fp proto.HardwareFingerprint, presented string, inventory proto.HardwareInventory) error {
 
 	if pending, err := tx.PendingReattestation(ctx, node.ID); err != nil {
 		return err
 	} else if pending != nil {
-		// Do not stack a new record per retry. A node that cannot enroll will
-		// retry with backoff forever, and one row per attempt would bury the
-		// operator queue.
+		// Already on someone's queue. A node that cannot enroll retries with
+		// backoff forever, and one row per attempt would bury the operator.
 		return &ReattestationError{
 			NodeID: node.ID, ReattestationID: pending.ID,
 			BoundHash: pending.BoundHash, PresentedHash: pending.PresentedHash,
-			ChangedFields: pending.ChangedFields,
+			ChangedFields: pending.ChangedFields, recorded: true,
 		}
 	}
 
@@ -556,45 +581,75 @@ func (s *Service) openReattestation(ctx context.Context, tx Tx, node *model.Node
 		GPUUUIDs:        bound.GPUUUIDs,
 		PrimaryNICMAC:   bound.PrimaryNICMAC,
 	}
-	changed := boundFP.Diff(fp)
-
-	ra := &model.Reattestation{
-		ID: uuid.New(), NodeID: node.ID, State: model.ReattestPending,
-		BoundHash: bound.FingerprintHash, PresentedHash: presented,
-		ChangedFields: changed, PresentedFromIP: remoteAddr, CreatedAt: now,
-	}
-	if err := tx.InsertReattestation(ctx, ra); err != nil {
-		return err
-	}
-	reason := "hardware fingerprint changed: " + strings.Join(changed, ", ")
-	if err := tx.QuarantineNode(ctx, node.ID, reason, now); err != nil {
-		return err
-	}
-	if err := tx.InsertEvent(ctx, &model.Event{
-		NodeID: node.ID, T: now, Severity: proto.SeverityCritical.String(),
-		Code: proto.CodeFingerprintChanged, Source: "controller", Message: reason,
-		Detail: map[string]string{
-			"bound_hash":     bound.FingerprintHash,
-			"presented_hash": presented,
-			"changed_fields": strings.Join(changed, ","),
-			"remote_addr":    remoteAddr,
-		},
-	}); err != nil {
-		return err
-	}
-	nodeID := node.ID
-	if err := tx.InsertAudit(ctx, &model.AuditEntry{
-		At: now, Actor: "system", ActorRole: "system", Action: model.ActionReattestOpen,
-		NodeID: &nodeID, Target: ra.ID.String(), Result: "denied", RemoteAddr: remoteAddr,
-		Detail: map[string]string{"changed_fields": strings.Join(changed, ",")},
-	}); err != nil {
-		return err
-	}
-
 	return &ReattestationError{
-		NodeID: node.ID, ReattestationID: ra.ID,
-		BoundHash: bound.FingerprintHash, PresentedHash: presented, ChangedFields: changed,
+		NodeID:        node.ID,
+		BoundHash:     bound.FingerprintHash,
+		PresentedHash: presented,
+		ChangedFields: boundFP.Diff(fp),
+		recorded:      false,
+		presented:     inventory,
 	}
+}
+
+// recordReattestation persists the mismatch, quarantines the node, and raises
+// the event — in its own committed transaction.
+//
+// The node is quarantined rather than merely refused because until a human
+// decides, we do not know that the machine reporting under this identity is
+// ours, and a quarantined node must not start workloads.
+//
+// It re-checks for a pending record under the new transaction: two agents (or
+// one agent retrying fast) can both detect the same mismatch before either
+// records it, and the operator queue should get one row, not two.
+func (s *Service) recordReattestation(ctx context.Context, re *ReattestationError, remoteAddr string, now time.Time) error {
+	return s.repo.InTx(ctx, func(tx Tx) error {
+		if pending, err := tx.PendingReattestation(ctx, re.NodeID); err != nil {
+			return err
+		} else if pending != nil {
+			re.ReattestationID = pending.ID
+			re.recorded = true
+			return nil
+		}
+
+		ra := &model.Reattestation{
+			ID: uuid.New(), NodeID: re.NodeID, State: model.ReattestPending,
+			BoundHash: re.BoundHash, PresentedHash: re.PresentedHash,
+			ChangedFields: re.ChangedFields, PresentedInventory: re.presented,
+			PresentedFromIP: remoteAddr, CreatedAt: now,
+		}
+		if err := tx.InsertReattestation(ctx, ra); err != nil {
+			return err
+		}
+
+		reason := "hardware fingerprint changed: " + strings.Join(re.ChangedFields, ", ")
+		if err := tx.QuarantineNode(ctx, re.NodeID, reason, now); err != nil {
+			return err
+		}
+		if err := tx.InsertEvent(ctx, &model.Event{
+			NodeID: re.NodeID, T: now, Severity: proto.SeverityCritical.String(),
+			Code: proto.CodeFingerprintChanged, Source: "controller", Message: reason,
+			Detail: map[string]string{
+				"bound_hash":     re.BoundHash,
+				"presented_hash": re.PresentedHash,
+				"changed_fields": strings.Join(re.ChangedFields, ","),
+				"remote_addr":    remoteAddr,
+			},
+		}); err != nil {
+			return err
+		}
+		nodeID := re.NodeID
+		if err := tx.InsertAudit(ctx, &model.AuditEntry{
+			At: now, Actor: "system", ActorRole: "system", Action: model.ActionReattestOpen,
+			NodeID: &nodeID, Target: ra.ID.String(), Result: "denied", RemoteAddr: remoteAddr,
+			Detail: map[string]string{"changed_fields": strings.Join(re.ChangedFields, ",")},
+		}); err != nil {
+			return err
+		}
+
+		re.ReattestationID = ra.ID
+		re.recorded = true
+		return nil
+	})
 }
 
 // ConfigHints returns the operating envelope handed to a node at enrollment.

@@ -508,3 +508,97 @@ func TestForgedPriorCredentialIsIgnored(t *testing.T) {
 		t.Fatal("a credential signed by an unknown key must not confer another node's identity")
 	}
 }
+
+// TestRefusedEnrollmentStillRecordsTheReattestation pins the thing that has to
+// happen in TWO transactions rather than one.
+//
+// Refusing the enrollment must roll back — the token has to stay unspent so a
+// field tech can retry once an operator releases the node. But the evidence the
+// operator needs to make that decision (the re-attestation row, the quarantine,
+// the CRITICAL event) must survive that rollback. An earlier version wrote all
+// of it inside the enrollment transaction, so the entire review flow was
+// silently discarded and the operator queue stayed empty.
+func TestRefusedEnrollmentStillRecordsTheReattestation(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	first, err := f.svc.Enroll(ctx, f.request(f.mint(t), fingerprint()), "203.0.113.9")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	swapped := fingerprint()
+	swapped.GPUUUIDs = []string{"GPU-cccc1111-2222-3333-4444-555566667777"}
+
+	res, err := f.svc.MintToken(ctx, MintParams{Actor: "tech@example.com"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	req := f.request(res.Secret, swapped)
+	req.PriorCredential = first.Credential
+
+	var re *ReattestationError
+	if _, err := f.svc.Enroll(ctx, req, "203.0.113.9"); !errors.As(err, &re) {
+		t.Fatalf("expected a re-attestation refusal, got %v", err)
+	}
+
+	// The evidence survived the rollback.
+	pending := f.repo.reattests[first.NodeID]
+	if len(pending) != 1 {
+		t.Fatalf("the re-attestation must be recorded despite the refusal, got %d rows", len(pending))
+	}
+	if pending[0].State != model.ReattestPending {
+		t.Errorf("state = %q, want pending", pending[0].State)
+	}
+	if re.ReattestationID != pending[0].ID {
+		t.Errorf("the error names %s but the record is %s", re.ReattestationID, pending[0].ID)
+	}
+	if got := f.repo.nodes[first.NodeID].Lifecycle; got != model.LifecycleQuarantined {
+		t.Errorf("node lifecycle = %q, want quarantined", got)
+	}
+	if got := len(f.repo.eventsWithCode(proto.CodeFingerprintChanged)); got != 1 {
+		t.Errorf("expected 1 identity.fingerprint_changed event, got %d", got)
+	}
+	if got := len(f.repo.auditsWithAction(model.ActionReattestOpen)); got != 1 {
+		t.Errorf("expected 1 reattestation.open audit row, got %d", got)
+	}
+
+	// And the token was NOT spent — the refusal rolled back, so a field tech
+	// can retry with it once an operator releases the node. A consumed token
+	// here is a second site visit.
+	if tok := f.repo.tokens[res.Token.ID]; tok.ConsumedAt != nil {
+		t.Error("a refused enrollment must not consume the token")
+	}
+	// Nor was a credential issued.
+	if got := f.repo.activeCredCount(first.NodeID); got != 1 {
+		t.Errorf("the refused enrollment must not issue a credential; live count = %d", got)
+	}
+}
+
+// TestConcurrentDetectionRecordsOneRow: two agents (or one retrying fast) can
+// both detect the same mismatch before either records it. The operator queue
+// gets one row, not two.
+func TestConcurrentDetectionRecordsOneRow(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+
+	first, err := f.svc.Enroll(ctx, f.request(f.mint(t), fingerprint()), "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	swapped := fingerprint()
+	swapped.GPUUUIDs = []string{"GPU-dddd1111-2222-3333-4444-555566667777"}
+
+	for i := 0; i < 4; i++ {
+		req := f.request(f.mint(t), swapped)
+		req.PriorCredential = first.Credential
+		var re *ReattestationError
+		if _, err := f.svc.Enroll(ctx, req, ""); !errors.As(err, &re) {
+			t.Fatalf("attempt %d: got %v", i, err)
+		}
+	}
+	if got := len(f.repo.reattests[first.NodeID]); got != 1 {
+		t.Fatalf("repeated detection must reuse one record, got %d rows", got)
+	}
+}

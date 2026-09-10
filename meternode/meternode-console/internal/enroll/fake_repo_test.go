@@ -16,11 +16,17 @@ import (
 //
 // It exists so the decisions this package makes — what happens to a node whose
 // GPU was swapped, what happens when a token is replayed — are testable without
-// a database. It is deliberately NOT transactional: InTx runs the function
-// against live maps and rolls nothing back on error. Every test that cares
-// about atomicity asserts on the real Postgres implementation instead
-// (internal/store, build tag `integration`), because a fake that pretended to
-// roll back would be testing the fake.
+// a database.
+//
+// InTx ACTUALLY rolls back. An earlier version did not, and that gap hid a real
+// bug: the re-attestation record, the node quarantine, and the CRITICAL event
+// were all written inside the enrollment transaction, which then rolled back
+// because the enrollment was refused — so the entire operator-review flow was
+// silently discarded, and no unit test could see it. A fake whose transactions
+// always commit is not a simplification, it is a blind spot.
+//
+// It still does not model row locking or unique constraints. Those are asserted
+// against real Postgres in internal/store (build tag `integration`).
 type fakeRepo struct {
 	mu sync.Mutex
 
@@ -54,7 +60,90 @@ func (f *fakeRepo) fail(name string) error { return f.failOn[name] }
 func (f *fakeRepo) InTx(ctx context.Context, fn func(Tx) error) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	return fn(f)
+
+	snapshot := f.snapshot()
+	if err := fn(f); err != nil {
+		f.restore(snapshot)
+		return err
+	}
+	return nil
+}
+
+// state is a deep copy of everything a transaction can touch.
+type state struct {
+	tokens    map[uuid.UUID]model.Token
+	nodes     map[uuid.UUID]model.Node
+	hardware  map[uuid.UUID]model.Hardware
+	creds     map[uuid.UUID][]model.Credential
+	reattests map[uuid.UUID][]model.Reattestation
+	events    int
+	audits    int
+}
+
+func (f *fakeRepo) snapshot() state {
+	s := state{
+		tokens:    map[uuid.UUID]model.Token{},
+		nodes:     map[uuid.UUID]model.Node{},
+		hardware:  map[uuid.UUID]model.Hardware{},
+		creds:     map[uuid.UUID][]model.Credential{},
+		reattests: map[uuid.UUID][]model.Reattestation{},
+		events:    len(f.events),
+		audits:    len(f.audits),
+	}
+	for k, v := range f.tokens {
+		s.tokens[k] = *v
+	}
+	for k, v := range f.nodes {
+		s.nodes[k] = *v
+	}
+	for k, v := range f.hardware {
+		s.hardware[k] = *v
+	}
+	for k, list := range f.creds {
+		for _, c := range list {
+			s.creds[k] = append(s.creds[k], *c)
+		}
+	}
+	for k, list := range f.reattests {
+		for _, r := range list {
+			s.reattests[k] = append(s.reattests[k], *r)
+		}
+	}
+	return s
+}
+
+func (f *fakeRepo) restore(s state) {
+	f.tokens = map[uuid.UUID]*model.Token{}
+	f.nodes = map[uuid.UUID]*model.Node{}
+	f.hardware = map[uuid.UUID]*model.Hardware{}
+	f.creds = map[uuid.UUID][]*model.Credential{}
+	f.reattests = map[uuid.UUID][]*model.Reattestation{}
+	for k, v := range s.tokens {
+		cp := v
+		f.tokens[k] = &cp
+	}
+	for k, v := range s.nodes {
+		cp := v
+		f.nodes[k] = &cp
+	}
+	for k, v := range s.hardware {
+		cp := v
+		f.hardware[k] = &cp
+	}
+	for k, list := range s.creds {
+		for _, c := range list {
+			cp := c
+			f.creds[k] = append(f.creds[k], &cp)
+		}
+	}
+	for k, list := range s.reattests {
+		for _, r := range list {
+			cp := r
+			f.reattests[k] = append(f.reattests[k], &cp)
+		}
+	}
+	f.events = f.events[:s.events]
+	f.audits = f.audits[:s.audits]
 }
 
 func (f *fakeRepo) InsertToken(ctx context.Context, t *model.Token) error {

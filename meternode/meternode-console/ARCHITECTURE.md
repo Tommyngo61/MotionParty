@@ -62,10 +62,17 @@ decisions unit-testable: what happens when a fingerprint changes, what a viewer
 may do, whether a token can be replayed. Those tests run in milliseconds with no
 container.
 
-What a fake cannot test — transaction atomicity, unique constraints, row locking
-under concurrency — is covered by `internal/store/integration_test.go` behind a
-build tag, against a real TimescaleDB. A fake that pretended to roll back would
-only be testing the fake.
+The fake repository in those tests **does** roll back on error, and that matters:
+an earlier version did not, and the gap hid a real bug — the re-attestation
+record, the node quarantine, and the CRITICAL event were written inside the
+enrollment transaction, which then rolled back because the enrollment was
+refused, silently discarding the entire operator-review flow. A fake whose
+transactions always commit is not a simplification, it is a blind spot.
+
+What a fake still cannot test — unique constraints, row locking under
+concurrency, real rollback semantics — is covered by
+`internal/store/integration_test.go` behind a build tag, against a real
+TimescaleDB.
 
 ## Request paths
 

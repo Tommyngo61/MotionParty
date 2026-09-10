@@ -52,10 +52,16 @@ make migrate           # apply migrations to the dev database
 The unit tests need nothing but Go. That is deliberate: `internal/store` is the
 only package that imports a database driver, so the decisions worth testing —
 what happens when a fingerprint changes, whether a token can be replayed, what a
-viewer may do — run in milliseconds against in-memory fakes. What a fake cannot
-honestly test (transaction atomicity, unique constraints, row locking under
-concurrency) lives in `internal/store/integration_test.go` behind the
-`integration` build tag.
+viewer may do — run in milliseconds against in-memory fakes.
+
+Those fakes roll back on error like a real transaction would. An earlier version
+did not, and the gap hid a real bug: a refused enrollment discarded the very
+re-attestation record an operator needs to review it. A fake whose transactions
+always commit is not a simplification, it is a blind spot.
+
+What they still cannot test — unique constraints, row locking under concurrency
+— lives in `internal/store/integration_test.go` behind the `integration` build
+tag.
 
 ## The simulator
 
